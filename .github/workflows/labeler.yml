@@ -1,0 +1,52 @@
+on:
+  pull_request:
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  apply-labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      new-labels: ${{ steps.labeler.outputs.new-labels }}
+      all-labels: ${{ steps.labeler.outputs.all-labels }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
+
+      - name: Labeler
+        id: labeler
+        uses: actions/labeler@v7.0.0
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          configuration-path: ".github/labeler.yml"
+          sync-labels: true
+          dot: true
+
+      - name: Generate Job Summary
+        if: ${{ success() }}
+        uses: actions/github-script@v8.0.0
+        env:
+          NEW_LABELS: ${{ steps.labeler.outputs.new-labels }}
+          ALL_LABELS: ${{ steps.labeler.outputs.all-labels }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const parseLabels = (labelString) => (
+              labelString ? labelString.split(',').map(label => label.trim()) : ['None']
+            );
+
+            const newLabels = parseLabels(process.env.NEW_LABELS);
+            const allLabels = parseLabels(process.env.ALL_LABELS);
+
+            core.summary
+              .addHeading('Labeling Results', 2)
+              .addRaw('**All Labels**', true)
+              .addList(allLabels)
+              .addRaw('**Newly Applied Labels**', true)
+              .addList(newLabels);
+
+            await core.summary.write();

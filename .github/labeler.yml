@@ -1,0 +1,28 @@
+
+github:
+  - changed-files:
+      - any-glob-to-any-file: [.github/**]
+
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file: [docs/**, '*.md', '*.rst', '*.txt']
+
+
+source-code:
+  - changed-files:
+      - any-glob-to-any-file: [src/**]
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: [tests/**]
+
+
+project:
+  - changed-files:
+      - any-glob-to-any-file: [pyproject.toml, LICENSE]
+
+automation:
+  - changed-files:
+      - any-glob-to-any-file: [.github/workflows/**, .github/actions/**, scripts/**]
+
