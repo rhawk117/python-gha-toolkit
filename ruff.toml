@@ -1,0 +1,30 @@
+required-version = ">=0.16.0"
+target-version = "py311"
+preview = false
+respect-gitignore = true
+src = ["src", "tests"]
+
+[lint]
+extend-select = [
+    "ANN",
+    "ARG",
+    "ASYNC",
+    "B",
+    "FBT",
+    "LOG",
+    "PTH",
+    "PT",
+    "RET",
+    "S",
+    "SLF",
+    "T20",
+    "TID",
+]
+
+ignore = ["FBT003"]
+explicit-preview-rules = true
+
+[format]
+quote-style = "single"
+indent-style = "tab"
+docstring-code-format = true
