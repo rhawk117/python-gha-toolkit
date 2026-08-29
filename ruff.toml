@@ -21,10 +21,13 @@ extend-select = [
     "TID",
 ]
 
-ignore = ["FBT003"]
+ignore = ["FBT003", "S101"]
 explicit-preview-rules = true
+
+
+[lint.per-file-ignores]
+"tests/**" = ["S101"]
 
 [format]
 quote-style = "single"
-indent-style = "tab"
 docstring-code-format = true

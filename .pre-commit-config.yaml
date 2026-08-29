@@ -1,0 +1,57 @@
+minimum_pre_commit_version: "4.6.2"
+
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+  - commit-msg
+
+repos:
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: no-commit-to-branch
+        args:
+          - --branch
+          - main
+          - --branch
+          - develop
+
+      - id: check-merge-conflict
+
+      - id: trailing-whitespace
+        args:
+          - --markdown-linebreak-ext=md
+
+      - id: check-toml
+      - id: check-yaml
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: "0.26"
+    hooks:
+      - id: validate-pyproject
+
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.38.0
+    hooks:
+      - id: check-github-workflows
+
+  - repo: local
+    hooks:
+      - id: uv-lock
+        name: check uv lockfile
+        entry: uv lock --check
+        language: system
+        files: ^(pyproject\.toml|uv\.lock|uv\.toml)$
+        pass_filenames: false
+
+      - id: quality-check
+        name: check repository
+        entry: scripts/quality.sh --check
+        language: system
+        pass_filenames: false
+        always_run: true
+        require_serial: true
+        stages:
+          - pre-commit
+          - pre-push

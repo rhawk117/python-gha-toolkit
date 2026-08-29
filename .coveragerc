@@ -1,0 +1,39 @@
+[run]
+branch = True
+parallel = True
+source = gha_toolkit
+omit =
+    src/gha_toolkit/events/_generated/*
+relative_files = True
+
+[paths]
+source =
+    src/gha_toolkit
+    */src/gha_toolkit
+
+[report]
+precision = 1
+show_missing = True
+skip_covered = True
+skip_empty = True
+sort = Cover
+fail_under = 0
+exclude_also =
+    ^\s*\.\.\.$
+    ^\s*pass$
+    if TYPE_CHECKING:
+    raise NotImplementedError$
+    @overload
+    class .*\(Protocol\):
+    def __repr__
+
+[html]
+directory = build/coverage/html
+show_contexts = True
+
+[xml]
+output = build/coverage/coverage.xml
+
+[json]
+output = build/coverage/coverage.json
+show_contexts = True

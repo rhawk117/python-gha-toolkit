@@ -49,4 +49,4 @@ test = [
     "pytest-randomly>=4.1.0",
     "pytest-xdist>=3.8.0",
 ]
-
+dev = [{ include-group = "check" }, { include-group = "test" }]
