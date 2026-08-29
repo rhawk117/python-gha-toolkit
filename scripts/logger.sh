@@ -11,10 +11,10 @@ _COLOR_BOLD='\033[1m'
 _COLOR_RESET='\033[0m'
 
 declare -Ar LOG_COLOR=(
-  [info]="$_COLOR_BLUE"
-  [success]="$_COLOR_GREEN"
-  [warn]="$_COLOR_YELLOW"
-  [error]="$_COLOR_RED"
+  [info]="${_COLOR_BLUE}"
+  [success]="${_COLOR_GREEN}"
+  [warn]="${_COLOR_YELLOW}"
+  [error]="${_COLOR_RED}"
 )
 
 declare -Ar LOG_LABEL=(
@@ -40,21 +40,21 @@ log::write() {
   shift
 
   if log::in_github_actions; then
-    printf '::%s::%s\n' "${LOG_ACTION[$level]}" "$*"
+    printf '::%s::%s\n' "${LOG_ACTION[${level}]}" "$*"
     return
   fi
 
-  if [[ $level == warn || $level == error ]]; then
+  if [[ ${level} == warn || ${level} == error ]]; then
     printf '%b%s%b  %s\n' \
-      "${LOG_COLOR[$level]}" \
-      "${LOG_LABEL[$level]}" \
-      "$_COLOR_RESET" \
+      "${LOG_COLOR[${level}]}" \
+      "${LOG_LABEL[${level}]}" \
+      "${_COLOR_RESET}" \
       "$*" >&2
   else
     printf '%b%s%b  %s\n' \
-      "${LOG_COLOR[$level]}" \
-      "${LOG_LABEL[$level]}" \
-      "$_COLOR_RESET" \
+      "${LOG_COLOR[${level}]}" \
+      "${LOG_LABEL[${level}]}" \
+      "${_COLOR_RESET}" \
       "$*"
   fi
 }
@@ -68,7 +68,7 @@ log::step() {
   if log::in_github_actions; then
     printf '::group::%s\n' "$*"
   else
-    printf '\n%b===> %s%b\n' "${_COLOR_BOLD}${_COLOR_CYAN}" "$*" "$_COLOR_RESET"
+    printf '\n%b===> %s%b\n' "${_COLOR_BOLD}${_COLOR_CYAN}" "$*" "${_COLOR_RESET}"
   fi
 }
 
@@ -91,18 +91,18 @@ quality::run_check() {
   local label=$1
   shift
 
-  log::step "$label"
+  log::step "${label}"
 
   if "$@"; then
-    log::success "$label"
+    log::success "${label}"
     log::step_end
     return 0
   fi
 
   local status=$?
 
-  log::error "$label"
+  log::error "${label}"
   log::step_end
 
-  return "$status"
+  return "${status}"
 }
