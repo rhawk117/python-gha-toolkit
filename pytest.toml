@@ -1,0 +1,22 @@
+[pytest]
+pythonpath = ["src", "."]
+testpaths = ["tests"]
+xfail_strict = true
+filterwarnings = ["error"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--import-mode=importlib",
+    "-rfE",
+    "--showlocals",
+    "--durations=10",
+]
+markers = [
+    "parity: asserts byte-identical behaviour with @actions/toolkit",
+    "extension: covers behaviour the JS toolkit does not have",
+    "security: delimiter injection, secret scrubbing, token leakage",
+    "property: hypothesis-driven, no function-scoped fixtures",
+    "codegen: exercises generated payload models or the generator itself",
+    "slow: takes longer than a second",
+    "serial: must not run concurrently with other tests",
+]
