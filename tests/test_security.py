@@ -27,19 +27,17 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from tests.fixtures.oidc import TestTokenTransport as OidcTokenTransport
+from tests.fixtures import MakeEnvFile, MakeEnvironment
+from tests.fixtures.oidc import FakeTokenTransport
 from tests.fixtures.runtime import FROZEN_DELIMITER
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
 from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import DelimiterInjectionError
-from gha_toolkit.files import HeredocFile
 from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.oidc import HttpOidcClient
 
-MakeEnvironment = Callable[..., ProcessEnvironment]
-MakeEnvFile = Callable[..., HeredocFile]
 MakeLogger = Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger]
 
 
@@ -116,10 +114,10 @@ def test_set_secret_value_never_appears_unescaped_in_sink_output(
 @pending
 def test_get_id_token_masks_the_token_before_returning(
     make_oidc_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
+    test_token_transport: FakeTokenTransport,
     make_logger: MakeLogger,
     make_oidc_client: Callable[
-        [OidcTokenTransport, ProcessEnvironment, WorkflowLogger], HttpOidcClient
+        [FakeTokenTransport, ProcessEnvironment, WorkflowLogger], HttpOidcClient
     ],
     sink: WriteRecorder,
 ) -> None:

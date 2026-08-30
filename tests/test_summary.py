@@ -13,6 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from tests.fixtures import MakeEnvironment
 from tests.markers import pending
 
 from gha_toolkit.environment import ProcessEnvironment
@@ -24,7 +25,6 @@ from gha_toolkit.summary import (
     SummaryTableCell,
 )
 
-MakeEnvironment = Callable[..., ProcessEnvironment]
 MakeStepSummary = Callable[[ProcessEnvironment], StepSummaryWriter]
 
 TEXT = 'hello world \U0001f30e'

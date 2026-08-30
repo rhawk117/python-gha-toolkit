@@ -78,11 +78,6 @@ def fake_oidc_dotenv_vars() -> Mapping[str, str]:
 
 
 @pytest.fixture
-def eol() -> str:
-    return os.linesep
-
-
-@pytest.fixture
 def test_environ(
     fake_runner_dotenv_vars: Mapping[str, str],
     fake_toolkit_dotenv_vars: Mapping[str, str],
@@ -95,19 +90,6 @@ def test_oidc_environ(
     test_environ: Mapping[str, str], fake_oidc_dotenv_vars: Mapping[str, str]
 ) -> Mapping[str, str]:
     return {**test_environ, **fake_oidc_dotenv_vars}
-
-
-@pytest.fixture
-def fake_os_environ(
-    monkeypatch: pytest.MonkeyPatch, test_environ: Mapping[str, str]
-) -> Mapping[str, str]:
-    for key in list(os.environ):
-        monkeypatch.delenv(key, raising=False)
-
-    for key, value in test_environ.items():
-        monkeypatch.setenv(key, value)
-
-    return test_environ
 
 
 @pytest.fixture

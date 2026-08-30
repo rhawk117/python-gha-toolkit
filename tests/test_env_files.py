@@ -13,19 +13,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from tests.fixtures import MakeEnvFile, MakeEnvironment, MakeOutput, MakeState
 from tests.fixtures.runtime import FROZEN_DELIMITER
 from tests.markers import pending
 
 from gha_toolkit.commands import OutputValue
-from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import DelimiterInjectionError, MissingRunnerFileError
-from gha_toolkit.files import HeredocFile
-from gha_toolkit.services import StepOutput, StepState
-
-MakeEnvironment = Callable[..., ProcessEnvironment]
-MakeEnvFile = Callable[..., HeredocFile]
-MakeOutput = Callable[..., StepOutput]
-MakeState = Callable[..., StepState]
 
 # -- exportVariable -----------------------------------------------------
 
@@ -90,13 +83,25 @@ def test_export_variable_writes_heredoc_block_for_value_shape(
     """
     env_path = runner_file_path('env')
     environment = make_environment({'GITHUB_ENV': str(env_path)})
-    if isinstance(value, str):
-        environment.set('my var', value)
-        assert environment.get('my var') == value
     env_file = make_env_file(environment, delimiter)
     env_file.set('my var', value)
     expected = f'my var<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
     assert env_path.read_text(encoding='utf-8') == expected
+
+
+@pytest.mark.parity
+@pending
+def test_export_variable_sets_the_environment_for_the_current_process(
+    make_environment: MakeEnvironment,
+) -> None:
+    """upstream: core.test.ts: 'exportVariable produces the correct command and sets the env'
+
+    Environment round-trip half of the upstream case; the heredoc write is
+    covered by `test_export_variable_writes_heredoc_block_for_value_shape`.
+    """
+    environment = make_environment()
+    environment.set('my var', 'var val')
+    assert environment.get('my var') == 'var val'
 
 
 @pytest.mark.security

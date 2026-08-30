@@ -18,7 +18,7 @@ class RecordedRequest:
 
 
 @dataclass(slots=True)
-class TestTokenTransport:
+class FakeTokenTransport:
     body: bytes = b'{"value": "id-token-value"}'
     error: Exception | None = None
     requests: list[RecordedRequest] = field(default_factory=list)
@@ -43,16 +43,16 @@ class TestTokenTransport:
 
 
 @pytest.fixture
-def test_token_transport() -> TestTokenTransport:
-    return TestTokenTransport()
+def test_token_transport() -> FakeTokenTransport:
+    return FakeTokenTransport()
 
 
 @pytest.fixture
 def make_oidc_client() -> Callable[
-    [TestTokenTransport, GithubEnvironment, ActionsLogger], HttpOidcClient
+    [FakeTokenTransport, GithubEnvironment, ActionsLogger], HttpOidcClient
 ]:
     def _make(
-        transport: TestTokenTransport,
+        transport: FakeTokenTransport,
         environment: GithubEnvironment,
         logger: ActionsLogger,
     ) -> HttpOidcClient:

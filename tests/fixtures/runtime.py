@@ -17,7 +17,7 @@ from gha_toolkit.services import RunnerPaths, StepOutput, StepState
 from gha_toolkit.summary import HtmlSummaryBuffer, StepSummaryWriter
 
 if TYPE_CHECKING:
-    from tests.fixtures.oidc import TestTokenTransport
+    from tests.fixtures.oidc import FakeTokenTransport
     from tests.fixtures.sink_recorder import WriteRecorder
 
 FROZEN_UUID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
@@ -30,25 +30,15 @@ def delimiter() -> Callable[[], str]:
 
 
 @pytest.fixture
-def counting_delimiter() -> Callable[[], str]:
-    counter = iter(range(1_000_000))
-
-    def _fixture() -> str:
-        return f'ghadelimiter_{next(counter):08d}'
-
-    return _fixture
-
-
-@pytest.fixture
 def make_runtime(
     make_logger: Callable[[WriteRecorder, GithubEnvironment], WorkflowLogger],
     make_runner_files: Callable[[GithubEnvironment, Callable[[], str]], RunnerFiles],
     make_inputs: Callable[[GithubEnvironment], EnvInputs],
     make_oidc_client: Callable[
-        [TestTokenTransport, GithubEnvironment, WorkflowLogger], HttpOidcClient
+        [FakeTokenTransport, GithubEnvironment, WorkflowLogger], HttpOidcClient
     ],
 ) -> Callable[
-    [GithubEnvironment, WriteRecorder, Callable[[], str], TestTokenTransport],
+    [GithubEnvironment, WriteRecorder, Callable[[], str], FakeTokenTransport],
     ActionsRuntime,
 ]:
     """Compose a full `ActionsRuntime` from already-constructed services.
@@ -62,7 +52,7 @@ def make_runtime(
         environment: GithubEnvironment,
         stream: WriteRecorder,
         delimiter: Callable[[], str],
-        token_transport: TestTokenTransport,
+        token_transport: FakeTokenTransport,
     ) -> ActionsRuntime:
         logger = make_logger(stream, environment)
         files = make_runner_files(environment, delimiter)

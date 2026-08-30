@@ -9,7 +9,7 @@ instead (see `gha_toolkit.oidc` module docstring), so there is no equivalent
 "build an HTTP client" seam left to test -- those two upstream cases are not
 cleanly mappable and are intentionally not ported. In their place, this file
 exercises the documented `get_id_token` contract (`gha_toolkit/oidc.py`
-module docstring, steps 1-6) directly against the fake `TestTokenTransport`.
+module docstring, steps 1-6) directly against the fake `FakeTokenTransport`.
 """
 
 import asyncio
@@ -17,7 +17,8 @@ from collections.abc import Callable, Mapping
 from urllib.parse import quote
 
 import pytest
-from tests.fixtures.oidc import TestTokenTransport as OidcTokenTransport
+from tests.fixtures import MakeEnvironment
+from tests.fixtures.oidc import FakeTokenTransport
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
@@ -26,24 +27,22 @@ from gha_toolkit.exceptions import OidcFailureError
 from gha_toolkit.logger import ActionsLogger, WorkflowLogger
 from gha_toolkit.oidc import HttpOidcClient
 
-MakeEnvironment = Callable[..., ProcessEnvironment]
-
 
 @pytest.fixture
 def make_client(
     make_logger: Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger],
     make_oidc_client: Callable[
-        [OidcTokenTransport, ProcessEnvironment, ActionsLogger], HttpOidcClient
+        [FakeTokenTransport, ProcessEnvironment, ActionsLogger], HttpOidcClient
     ],
     sink: WriteRecorder,
-) -> Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient]:
+) -> Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient]:
     """Build an `HttpOidcClient` bound to a fresh `WorkflowLogger`, mirroring
     upstream's `oidc-client-tests` setup, which never asserts against logger
     output -- only `test_security.py`'s masking case does.
     """
 
     def _make(
-        environment: ProcessEnvironment, transport: OidcTokenTransport
+        environment: ProcessEnvironment, transport: FakeTokenTransport
     ) -> HttpOidcClient:
         logger = make_logger(sink, environment)
         return make_oidc_client(transport, environment, logger)
@@ -55,8 +54,8 @@ def make_client(
 @pending
 def test_get_id_token_raises_when_request_token_is_missing(
     make_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
-    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
+    test_token_transport: FakeTokenTransport,
+    make_client: Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 1: a missing/empty `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
     raises `OidcFailureError` before any request is issued.
@@ -71,8 +70,8 @@ def test_get_id_token_raises_when_request_token_is_missing(
 @pending
 def test_get_id_token_raises_when_request_url_is_missing(
     make_oidc_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
-    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
+    test_token_transport: FakeTokenTransport,
+    make_client: Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 2: a missing/empty `ACTIONS_ID_TOKEN_REQUEST_URL`
     raises `OidcFailureError` before any request is issued.
@@ -88,8 +87,8 @@ def test_get_id_token_raises_when_request_url_is_missing(
 def test_get_id_token_appends_url_encoded_audience(
     test_oidc_environ: Mapping[str, str],
     make_oidc_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
-    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
+    test_token_transport: FakeTokenTransport,
+    make_client: Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 3: a non-`None` audience is URL-encoded and
     appended to the resolved request URL as a literal `&audience=...` suffix.
@@ -113,8 +112,8 @@ def test_get_id_token_appends_url_encoded_audience(
 @pending
 def test_get_id_token_wraps_transport_failure(
     make_oidc_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
-    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
+    test_token_transport: FakeTokenTransport,
+    make_client: Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 5: an exception raised by the bound transport
     is caught and re-raised as `OidcFailureError`, chained from the original.
@@ -131,8 +130,8 @@ def test_get_id_token_wraps_transport_failure(
 @pending
 def test_get_id_token_raises_when_value_field_is_missing(
     make_oidc_environment: MakeEnvironment,
-    test_token_transport: OidcTokenTransport,
-    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
+    test_token_transport: FakeTokenTransport,
+    make_client: Callable[[ProcessEnvironment, FakeTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 6: a response body that is valid JSON but has
     no (or an empty) `'value'` field raises `OidcFailureError`.

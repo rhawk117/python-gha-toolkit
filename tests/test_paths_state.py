@@ -7,13 +7,12 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from tests.fixtures import MakeEnvironment
 from tests.markers import pending
 
 from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import MissingRunnerFileError
 from gha_toolkit.services import RunnerPaths, StepState
-
-MakeEnvironment = Callable[..., ProcessEnvironment]
 
 
 @pytest.mark.parity

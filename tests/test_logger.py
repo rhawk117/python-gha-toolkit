@@ -8,7 +8,8 @@ import os
 from collections.abc import Callable
 
 import pytest
-from tests.fixtures.oidc import TestTokenTransport as OidcTokenTransport
+from tests.fixtures import MakeEnvironment
+from tests.fixtures.oidc import FakeTokenTransport
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
@@ -19,11 +20,12 @@ from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.runtime import ActionsRuntime, use_runtime
 
 MakeLogger = Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger]
-MakeEnvironment = Callable[..., ProcessEnvironment]
 MakeRuntime = Callable[
-    [ProcessEnvironment, WriteRecorder, Callable[[], str], OidcTokenTransport],
+    [ProcessEnvironment, WriteRecorder, Callable[[], str], FakeTokenTransport],
     ActionsRuntime,
 ]
+LogWithMessage = Callable[[WorkflowLogger, str], None]
+LogWithOptions = Callable[[WorkflowLogger, str, AnnotationOptions], None]
 
 
 @pytest.mark.parity
@@ -72,7 +74,7 @@ def test_set_failed_sets_exit_code_and_writes_error(
     sink: WriteRecorder,
     make_environment: MakeEnvironment,
     delimiter: Callable[[], str],
-    test_token_transport: OidcTokenTransport,
+    test_token_transport: FakeTokenTransport,
     make_runtime: MakeRuntime,
     message: str | Exception,
     expected_exit_code: ExitCode,
@@ -92,19 +94,39 @@ def test_set_failed_sets_exit_code_and_writes_error(
 @pytest.mark.parity
 @pending
 @pytest.mark.parametrize(
-    ('level', 'message', 'expected'),
+    ('log', 'message', 'expected'),
     [
-        pytest.param('debug', 'Debug', 'debug::Debug', id='debug'),
-        pytest.param('notice', 'Notice', 'notice::Notice', id='notice'),
-        pytest.param('warning', 'Warning', 'warning::Warning', id='warning'),
-        pytest.param('error', 'Error message', 'error::Error message', id='error'),
+        pytest.param(
+            lambda logger, message: logger.debug(message),
+            'Debug',
+            'debug::Debug',
+            id='debug',
+        ),
+        pytest.param(
+            lambda logger, message: logger.notice(message),
+            'Notice',
+            'notice::Notice',
+            id='notice',
+        ),
+        pytest.param(
+            lambda logger, message: logger.warning(message),
+            'Warning',
+            'warning::Warning',
+            id='warning',
+        ),
+        pytest.param(
+            lambda logger, message: logger.error(message),
+            'Error message',
+            'error::Error message',
+            id='error',
+        ),
     ],
 )
 def test_log_level_sets_the_correct_message(
     make_logger: MakeLogger,
     sink: WriteRecorder,
     empty_environment: ProcessEnvironment,
-    level: str,
+    log: LogWithMessage,
     message: str,
     expected: str,
 ) -> None:
@@ -114,22 +136,35 @@ def test_log_level_sets_the_correct_message(
     upstream: core.test.ts: 'error sets the correct error message'
     """
     logger = make_logger(sink, empty_environment)
-    getattr(logger, level)(message)
+    log(logger, message)
     sink.assert_writes([f'::{expected}{os.linesep}'])
 
 
 @pytest.mark.parity
 @pending
 @pytest.mark.parametrize(
-    ('level', 'message', 'expected'),
+    ('log', 'message', 'expected'),
     [
-        pytest.param('debug', '\r\ndebug\n', 'debug::%0D%0Adebug%0A', id='debug'),
-        pytest.param('notice', '\r\nnotice\n', 'notice::%0D%0Anotice%0A', id='notice'),
         pytest.param(
-            'warning', '\r\nwarning\n', 'warning::%0D%0Awarning%0A', id='warning'
+            lambda logger, message: logger.debug(message),
+            '\r\ndebug\n',
+            'debug::%0D%0Adebug%0A',
+            id='debug',
         ),
         pytest.param(
-            'error',
+            lambda logger, message: logger.notice(message),
+            '\r\nnotice\n',
+            'notice::%0D%0Anotice%0A',
+            id='notice',
+        ),
+        pytest.param(
+            lambda logger, message: logger.warning(message),
+            '\r\nwarning\n',
+            'warning::%0D%0Awarning%0A',
+            id='warning',
+        ),
+        pytest.param(
+            lambda logger, message: logger.error(message),
             'Error message\r\n\n',
             'error::Error message%0D%0A%0A',
             id='error',
@@ -140,7 +175,7 @@ def test_log_level_escapes_the_message(
     make_logger: MakeLogger,
     sink: WriteRecorder,
     empty_environment: ProcessEnvironment,
-    level: str,
+    log: LogWithMessage,
     message: str,
     expected: str,
 ) -> None:
@@ -150,36 +185,70 @@ def test_log_level_escapes_the_message(
     upstream: core.test.ts: 'error escapes the error message'
     """
     logger = make_logger(sink, empty_environment)
-    getattr(logger, level)(message)
+    log(logger, message)
     sink.assert_writes([f'::{expected}{os.linesep}'])
 
 
 @pytest.mark.parity
 @pending
-@pytest.mark.parametrize('level', ['notice', 'warning', 'error'])
+@pytest.mark.parametrize(
+    ('level', 'log'),
+    [
+        pytest.param(
+            'notice', lambda logger, message: logger.notice(message), id='notice'
+        ),
+        pytest.param(
+            'warning', lambda logger, message: logger.warning(message), id='warning'
+        ),
+        pytest.param(
+            'error', lambda logger, message: logger.error(message), id='error'
+        ),
+    ],
+)
 def test_annotation_level_handles_an_error_object(
     make_logger: MakeLogger,
     sink: WriteRecorder,
     empty_environment: ProcessEnvironment,
     level: str,
+    log: LogWithMessage,
 ) -> None:
     """upstream: core.test.ts: 'notice handles an error object'
     upstream: core.test.ts: 'warning handles an error object'
     upstream: core.test.ts: 'error handles an error object'
     """
     logger = make_logger(sink, empty_environment)
-    getattr(logger, level)(str(Exception('this is my error message')))
+    log(logger, str(Exception('this is my error message')))
     sink.assert_writes([f'::{level}::this is my error message{os.linesep}'])
 
 
 @pytest.mark.parity
 @pending
-@pytest.mark.parametrize('level', ['notice', 'warning', 'error'])
+@pytest.mark.parametrize(
+    ('level', 'log'),
+    [
+        pytest.param(
+            'notice',
+            lambda logger, message, options: logger.notice(message, options=options),
+            id='notice',
+        ),
+        pytest.param(
+            'warning',
+            lambda logger, message, options: logger.warning(message, options=options),
+            id='warning',
+        ),
+        pytest.param(
+            'error',
+            lambda logger, message, options: logger.error(message, options=options),
+            id='error',
+        ),
+    ],
+)
 def test_annotation_level_handles_parameters_correctly(
     make_logger: MakeLogger,
     sink: WriteRecorder,
     empty_environment: ProcessEnvironment,
     level: str,
+    log: LogWithOptions,
 ) -> None:
     """upstream: core.test.ts: 'notice handles parameters correctly'
     upstream: core.test.ts: 'warning handles parameters correctly'
@@ -194,7 +263,7 @@ def test_annotation_level_handles_parameters_correctly(
         start_line=5,
         end_line=5,
     )
-    getattr(logger, level)('this is my error message', options=options)
+    log(logger, 'this is my error message', options)
     sink.assert_writes(
         [
             (
