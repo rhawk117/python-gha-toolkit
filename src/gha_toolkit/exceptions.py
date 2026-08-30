@@ -26,6 +26,20 @@ class MissingInputError(GhaToolkitError):
     """
 
 
+class InputParseError(GhaToolkitError):
+    """Raised when converting a workflow input's raw string value fails.
+
+    Typed replacement for upstream `@actions/core`'s bare `TypeError` -- for
+    example `getBooleanInput` raising `TypeError('Input does not meet YAML 1.2
+    "Core Schema" specification: ...')` when a value is not one of the six
+    legal boolean literals. Raised by :meth:`gha_toolkit.inputs.ActionsInputs.get`
+    whenever the caller-supplied ``parser`` callable raises on the input's raw
+    string value; the stock accessors (:meth:`ActionsInputs.get_boolean` and
+    friends) surface this for their own parsing failures the same way, since
+    they are implemented on top of :meth:`ActionsInputs.get`.
+    """
+
+
 class MissingRunnerFileError(GhaToolkitError):
     """Raised when a runner-provided command-file environment variable is unset.
 
