@@ -13,12 +13,13 @@ from pathlib import Path
 import pytest
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment
+from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import SummaryAccessError
-from gha_toolkit.files import StepSummaryFile
+from gha_toolkit.files import SummaryFile
 from gha_toolkit.summary import (
     ActionStepSummary,
-    ActionSummary,
+    HtmlSummaryBuffer,
+    StepSummaryWriter,
     SummaryImageOptions,
     SummaryTableCell,
 )
@@ -42,8 +43,8 @@ def _step_summary(test_environ: Mapping[str, str], tmp_path: Path) -> ActionStep
     summary_path = tmp_path / 'test-summary.md'
     summary_path.write_text('', encoding='utf-8')
     environ = {**test_environ, 'GITHUB_STEP_SUMMARY': str(summary_path)}
-    environment = GithubEnvironment(dict(environ))
-    return ActionStepSummary(StepSummaryFile('GITHUB_STEP_SUMMARY', environment))
+    environment = ProcessEnvironment(dict(environ))
+    return StepSummaryWriter(SummaryFile('GITHUB_STEP_SUMMARY', environment))
 
 
 @pytest.mark.parity
@@ -53,10 +54,8 @@ def test_throws_if_summary_env_var_is_undefined(
 ) -> None:
     """upstream: summary.test.ts: 'throws if summary env var is undefined'"""
     environ = {**test_environ, 'GITHUB_STEP_SUMMARY': ''}
-    environment = GithubEnvironment(dict(environ))
-    step_summary = ActionStepSummary(
-        StepSummaryFile('GITHUB_STEP_SUMMARY', environment)
-    )
+    environment = ProcessEnvironment(dict(environ))
+    step_summary = StepSummaryWriter(SummaryFile('GITHUB_STEP_SUMMARY', environment))
     step_summary.buffer.add_raw(TEXT)
     with pytest.raises(SummaryAccessError):
         step_summary.write()
@@ -70,10 +69,8 @@ def test_throws_if_summary_file_does_not_exist(
     """upstream: summary.test.ts: 'throws if summary file does not exist'"""
     missing_path = tmp_path / 'missing-summary.md'
     environ = {**test_environ, 'GITHUB_STEP_SUMMARY': str(missing_path)}
-    environment = GithubEnvironment(dict(environ))
-    step_summary = ActionStepSummary(
-        StepSummaryFile('GITHUB_STEP_SUMMARY', environment)
-    )
+    environment = ProcessEnvironment(dict(environ))
+    step_summary = StepSummaryWriter(SummaryFile('GITHUB_STEP_SUMMARY', environment))
     step_summary.buffer.add_raw(TEXT)
     with pytest.raises(SummaryAccessError):
         step_summary.write()
@@ -139,7 +136,7 @@ def test_empties_buffer_after_write(
 @pending
 def test_returns_summary_buffer_as_string() -> None:
     """upstream: summary.test.ts: 'returns summary buffer as string'"""
-    buffer = ActionSummary()
+    buffer = HtmlSummaryBuffer()
     buffer.add_raw(TEXT)
     assert buffer.stringify() == TEXT
 
@@ -148,7 +145,7 @@ def test_returns_summary_buffer_as_string() -> None:
 @pending
 def test_returns_correct_values_for_is_empty_buffer() -> None:
     """upstream: summary.test.ts: 'return correct values for isEmptyBuffer'"""
-    buffer = ActionSummary()
+    buffer = HtmlSummaryBuffer()
     buffer.add_raw(TEXT)
     assert buffer.is_empty_buffer() is False
     buffer.empty_buffer()

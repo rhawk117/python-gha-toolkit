@@ -14,15 +14,15 @@ from tests.markers import pending
 
 from gha_toolkit import core
 from gha_toolkit.commands import AnnotationOptions, ExitCode
-from gha_toolkit.environment import GithubEnvironment
-from gha_toolkit.files import ActionsFiles, KeyValueFile, PathFile, StepSummaryFile
-from gha_toolkit.inputs import ActionsInputs
-from gha_toolkit.logger import ActionsLogger
-from gha_toolkit.oidc import OidcClient
+from gha_toolkit.environment import ProcessEnvironment
+from gha_toolkit.files import ActionsFiles, HeredocFile, PathListFile, SummaryFile
+from gha_toolkit.inputs import EnvInputs
+from gha_toolkit.logger import WorkflowLogger
+from gha_toolkit.oidc import HttpOidcClient
 from gha_toolkit.runtime import ActionsRuntime, use_runtime
-from gha_toolkit.services import ActionsOutput, ActionsPaths, ActionsState
+from gha_toolkit.services import RunnerPaths, StepOutput, StepState
 from gha_toolkit.sinks import StdoutSink
-from gha_toolkit.summary import ActionStepSummary
+from gha_toolkit.summary import StepSummaryWriter
 
 
 def _build_runtime(
@@ -37,27 +37,27 @@ def _build_runtime(
     them raise -- so building this runtime never itself triggers the pending
     xfail; only calling a method on one of its services does.
     """
-    environment = GithubEnvironment(dict(test_environ))
-    logger = ActionsLogger(
+    environment = ProcessEnvironment(dict(test_environ))
+    logger = WorkflowLogger(
         sink=StdoutSink(stream=sink), stream=sink, environment=environment
     )
     files = ActionsFiles(
-        env=KeyValueFile('GITHUB_ENV', environment, delimiter),
-        output=KeyValueFile('GITHUB_OUTPUT', environment, delimiter),
-        state=KeyValueFile('GITHUB_STATE', environment, delimiter),
-        path=PathFile('GITHUB_PATH', environment),
-        step_summary=StepSummaryFile('GITHUB_STEP_SUMMARY', environment),
+        env=HeredocFile('GITHUB_ENV', environment, delimiter),
+        output=HeredocFile('GITHUB_OUTPUT', environment, delimiter),
+        state=HeredocFile('GITHUB_STATE', environment, delimiter),
+        path=PathListFile('GITHUB_PATH', environment),
+        step_summary=SummaryFile('GITHUB_STEP_SUMMARY', environment),
     )
     return ActionsRuntime(
-        inputs=ActionsInputs(environment),
+        inputs=EnvInputs(environment),
         logger=logger,
-        output=ActionsOutput(files.output),
-        state=ActionsState(files.state, environment),
-        paths=ActionsPaths(files.path, environment),
+        output=StepOutput(files.output),
+        state=StepState(files.state, environment),
+        paths=RunnerPaths(files.path, environment),
         files=files,
         environment=environment,
-        step_summary=ActionStepSummary(files.step_summary),
-        oidc=OidcClient(test_token_transport, environment, logger),
+        step_summary=StepSummaryWriter(files.step_summary),
+        oidc=HttpOidcClient(test_token_transport, environment, logger),
     )
 
 
@@ -65,8 +65,8 @@ def _build_runtime(
 @pending
 def test_set_secret_produces_command(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'setSecret produces the correct command'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.set_secret('secret val')
     logger.set_secret('multi\nline\r\nsecret')
@@ -130,8 +130,8 @@ def test_set_failed_handles_error(
 @pending
 def test_error_sets_the_correct_error_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'error sets the correct error message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.error('Error message')
     sink.assert_writes([f'::error::Error message{os.linesep}'])
@@ -141,8 +141,8 @@ def test_error_sets_the_correct_error_message(sink: WriteRecorder) -> None:
 @pending
 def test_error_escapes_the_error_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'error escapes the error message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.error('Error message\r\n\n')
     sink.assert_writes([f'::error::Error message%0D%0A%0A{os.linesep}'])
@@ -152,8 +152,8 @@ def test_error_escapes_the_error_message(sink: WriteRecorder) -> None:
 @pending
 def test_error_handles_an_error_object(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'error handles an error object'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.error(str(Exception('this is my error message')))
     sink.assert_writes([f'::error::this is my error message{os.linesep}'])
@@ -163,8 +163,8 @@ def test_error_handles_an_error_object(sink: WriteRecorder) -> None:
 @pending
 def test_error_handles_parameters_correctly(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'error handles parameters correctly'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     options = AnnotationOptions(
         title='A title',
@@ -189,8 +189,8 @@ def test_error_handles_parameters_correctly(sink: WriteRecorder) -> None:
 @pending
 def test_warning_sets_the_correct_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'warning sets the correct message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.warning('Warning')
     sink.assert_writes([f'::warning::Warning{os.linesep}'])
@@ -200,8 +200,8 @@ def test_warning_sets_the_correct_message(sink: WriteRecorder) -> None:
 @pending
 def test_warning_escapes_the_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'warning escapes the message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.warning('\r\nwarning\n')
     sink.assert_writes([f'::warning::%0D%0Awarning%0A{os.linesep}'])
@@ -211,8 +211,8 @@ def test_warning_escapes_the_message(sink: WriteRecorder) -> None:
 @pending
 def test_warning_handles_an_error_object(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'warning handles an error object'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.warning(str(Exception('this is my error message')))
     sink.assert_writes([f'::warning::this is my error message{os.linesep}'])
@@ -222,8 +222,8 @@ def test_warning_handles_an_error_object(sink: WriteRecorder) -> None:
 @pending
 def test_warning_handles_parameters_correctly(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'warning handles parameters correctly'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     options = AnnotationOptions(
         title='A title',
@@ -248,8 +248,8 @@ def test_warning_handles_parameters_correctly(sink: WriteRecorder) -> None:
 @pending
 def test_notice_sets_the_correct_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'notice sets the correct message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.notice('Notice')
     sink.assert_writes([f'::notice::Notice{os.linesep}'])
@@ -259,8 +259,8 @@ def test_notice_sets_the_correct_message(sink: WriteRecorder) -> None:
 @pending
 def test_notice_escapes_the_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'notice escapes the message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.notice('\r\nnotice\n')
     sink.assert_writes([f'::notice::%0D%0Anotice%0A{os.linesep}'])
@@ -270,8 +270,8 @@ def test_notice_escapes_the_message(sink: WriteRecorder) -> None:
 @pending
 def test_notice_handles_an_error_object(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'notice handles an error object'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.notice(str(Exception('this is my error message')))
     sink.assert_writes([f'::notice::this is my error message{os.linesep}'])
@@ -281,8 +281,8 @@ def test_notice_handles_an_error_object(sink: WriteRecorder) -> None:
 @pending
 def test_notice_handles_parameters_correctly(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'notice handles parameters correctly'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     options = AnnotationOptions(
         title='A title',
@@ -307,8 +307,8 @@ def test_notice_handles_parameters_correctly(sink: WriteRecorder) -> None:
 @pending
 def test_start_group_starts_a_new_group(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'startGroup starts a new group'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.start_group('my-group')
     sink.assert_writes([f'::group::my-group{os.linesep}'])
@@ -318,8 +318,8 @@ def test_start_group_starts_a_new_group(sink: WriteRecorder) -> None:
 @pending
 def test_end_group_ends_new_group(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'endGroup ends new group'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.end_group()
     sink.assert_writes([f'::endgroup::{os.linesep}'])
@@ -333,8 +333,8 @@ def test_group_wraps_a_call_in_a_group(sink: WriteRecorder) -> None:
     Adapted from upstream's async wrapper function to a synchronous context
     manager -- see `ActionsLogger.group`'s docstring for why.
     """
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     with logger.group('mygroup'):
         sink.write('in my group\n')
@@ -351,8 +351,8 @@ def test_group_wraps_a_call_in_a_group(sink: WriteRecorder) -> None:
 @pending
 def test_debug_sets_the_correct_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'debug sets the correct message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.debug('Debug')
     sink.assert_writes([f'::debug::Debug{os.linesep}'])
@@ -362,8 +362,8 @@ def test_debug_sets_the_correct_message(sink: WriteRecorder) -> None:
 @pending
 def test_debug_escapes_the_message(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'debug escapes the message'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.debug('\r\ndebug\n')
     sink.assert_writes([f'::debug::%0D%0Adebug%0A{os.linesep}'])
@@ -373,17 +373,17 @@ def test_debug_escapes_the_message(sink: WriteRecorder) -> None:
 @pending
 def test_is_debug_checks_debug_state(test_environ: Mapping[str, str]) -> None:
     """upstream: core.test.ts: 'isDebug check debug state'"""
-    logger = ActionsLogger(
+    logger = WorkflowLogger(
         sink=StdoutSink(stream=WriteRecorder()),
         stream=WriteRecorder(),
-        environment=GithubEnvironment(dict(test_environ)),
+        environment=ProcessEnvironment(dict(test_environ)),
     )
     assert logger.is_debug() is False
     debug_environ = {**test_environ, 'RUNNER_DEBUG': '1'}
-    debug_logger = ActionsLogger(
+    debug_logger = WorkflowLogger(
         sink=StdoutSink(stream=WriteRecorder()),
         stream=WriteRecorder(),
-        environment=GithubEnvironment(dict(debug_environ)),
+        environment=ProcessEnvironment(dict(debug_environ)),
     )
     assert debug_logger.is_debug() is True
 
@@ -392,8 +392,8 @@ def test_is_debug_checks_debug_state(test_environ: Mapping[str, str]) -> None:
 @pending
 def test_set_command_echo_can_enable_echoing(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'setCommandEcho can enable echoing'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.set_command_echo(enabled=True)
     sink.assert_writes([f'::echo::on{os.linesep}'])
@@ -403,8 +403,8 @@ def test_set_command_echo_can_enable_echoing(sink: WriteRecorder) -> None:
 @pending
 def test_set_command_echo_can_disable_echoing(sink: WriteRecorder) -> None:
     """upstream: core.test.ts: 'setCommandEcho can disable echoing'"""
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     logger.set_command_echo(enabled=False)
     sink.assert_writes([f'::echo::off{os.linesep}'])

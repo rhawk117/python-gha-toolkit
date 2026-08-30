@@ -9,10 +9,10 @@ from pathlib import Path
 import pytest
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment
+from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import MissingRunnerFileError
-from gha_toolkit.files import KeyValueFile, PathFile
-from gha_toolkit.services import ActionsPaths, ActionsState
+from gha_toolkit.files import HeredocFile, PathListFile
+from gha_toolkit.services import RunnerPaths, StepState
 
 
 @pytest.mark.parity
@@ -24,8 +24,8 @@ def test_prepend_path_produces_commands_and_sets_env(
     path_file_path = tmp_path / 'path'
     path_file_path.write_text('', encoding='utf-8')
     environ = {**test_environ, 'GITHUB_PATH': str(path_file_path)}
-    environment = GithubEnvironment(dict(environ))
-    paths = ActionsPaths(PathFile('GITHUB_PATH', environment), environment)
+    environment = ProcessEnvironment(dict(environ))
+    paths = RunnerPaths(PathListFile('GITHUB_PATH', environment), environment)
     paths.add('myPath')
     assert environment.get('PATH') == f'myPath{os.pathsep}path1{os.pathsep}path2'
     assert path_file_path.read_text(encoding='utf-8') == f'myPath{os.linesep}'
@@ -43,8 +43,8 @@ def test_legacy_prepend_path_produces_commands_and_sets_env(
     the removed `::add-path` stdout command.
     """
     environ = {**test_environ, 'GITHUB_PATH': ''}
-    environment = GithubEnvironment(dict(environ))
-    paths = ActionsPaths(PathFile('GITHUB_PATH', environment), environment)
+    environment = ProcessEnvironment(dict(environ))
+    paths = RunnerPaths(PathListFile('GITHUB_PATH', environment), environment)
     with pytest.raises(MissingRunnerFileError):
         paths.add('myPath')
 
@@ -53,6 +53,6 @@ def test_legacy_prepend_path_produces_commands_and_sets_env(
 @pending
 def test_get_state_gets_wrapper_action_state(test_environ: Mapping[str, str]) -> None:
     """upstream: core.test.ts: 'getState gets wrapper action state'"""
-    environment = GithubEnvironment(dict(test_environ))
-    state = ActionsState(KeyValueFile('GITHUB_STATE', environment), environment)
+    environment = ProcessEnvironment(dict(test_environ))
+    state = StepState(HeredocFile('GITHUB_STATE', environment), environment)
     assert state.get('TEST_1') == 'state_val'

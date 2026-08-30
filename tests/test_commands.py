@@ -14,8 +14,8 @@ from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
 from gha_toolkit.commands import ActionCommand, AnnotationOptions
-from gha_toolkit.environment import GithubEnvironment
-from gha_toolkit.logger import ActionsLogger
+from gha_toolkit.environment import ProcessEnvironment
+from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.sinks import StdoutSink
 
 
@@ -208,8 +208,8 @@ def test_annotations_map_field_names_correctly(sink: WriteRecorder) -> None:
     do not expose.
     """
     stdout_sink = StdoutSink(stream=sink)
-    logger = ActionsLogger(
-        sink=stdout_sink, stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=stdout_sink, stream=sink, environment=ProcessEnvironment({})
     )
     options = AnnotationOptions(
         title='A title',

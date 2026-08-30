@@ -40,24 +40,12 @@ from gha_toolkit.events import WebhookEvent
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class ContextRepo:
-    """The `(owner, repo)` pair `GitHubContext.repo` resolves to.
-
-    Parity with upstream `Context.repo`'s return shape (`context.ts:66-82`).
-    """
-
     owner: str
     repo: str
 
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class ContextIssue:
-    """The `(owner, repo, number)` triple `GitHubContext.issue` resolves to.
-
-    Parity with upstream `Context.issue`'s return shape (`context.ts:57-64`):
-    `owner`/`repo` are `ContextRepo`'s fields, `number` is the triggering
-    issue or pull request's number.
-    """
-
     owner: str
     repo: str
     number: int
@@ -65,16 +53,6 @@ class ContextIssue:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class GitHubContext:
-    """Typed snapshot of the runner's context environment variables.
-
-    See the module docstring for the field-to-variable naming convention and
-    for which fields extend upstream's narrower `Context` class. Construction
-    is pure data -- every field is a plain value, so
-    `GitHubContext(event_name='push', sha='...', ..., event=WebhookEvent(...))`
-    works without raising. `repo` and `issue` are the only behavior on this
-    class.
-    """
-
     event_name: str
     sha: str
     ref: str
@@ -96,42 +74,8 @@ class GitHubContext:
 
     @property
     def repo(self) -> ContextRepo:
-        """Return the `(owner, repo)` pair this workflow run belongs to.
-
-        Resolution (parity with upstream `Context.repo`, `context.ts:66-82`):
-          1. If `self.repository` is non-empty, split it on `'/'` into
-             `(owner, repo)`.
-          2. Otherwise, if `self.event.payload` has a `repository` key, use
-             its `owner.login` and `name`.
-          3. Otherwise, raise.
-
-        Raises:
-            ValueError: neither source above is available. Message, verbatim
-                parity with upstream: "context.repo requires a GITHUB_REPOSITORY environment variable like 'owner/repo'".
-                A plain `ValueError` rather than a
-                `gha_toolkit.exceptions.GhaToolkitError` subclass is a
-                deliberate deviation from this package's typed-exception
-                convention: this ticket's file scope does not authorize a
-                second additive exception class (see
-                `gha_toolkit.exceptions.EventPayloadError`, the one this
-                ticket does add), and upstream itself raises a plain,
-                untyped `Error` here.
-            NotImplementedError: always; this is an interface stub.
-        """
         raise NotImplementedError
 
     @property
     def issue(self) -> ContextIssue:
-        """Return the `(owner, repo, number)` triple of the triggering issue or PR.
-
-        Resolution (parity with upstream `Context.issue`, `context.ts:57-64`):
-        `owner`/`repo` come from `self.repo`; `number` comes from
-        `self.event.payload['issue']['number']`, falling back to
-        `self.event.payload['pull_request']['number']`, falling back to
-        `self.event.payload['number']`.
-
-        Raises:
-            ValueError: see `repo`; propagates if `self.repo` raises.
-            NotImplementedError: always; this is an interface stub.
-        """
         raise NotImplementedError

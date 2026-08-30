@@ -32,11 +32,11 @@ from tests.fixtures.runtime import FROZEN_DELIMITER
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment
+from gha_toolkit.environment import GithubEnvironment, ProcessEnvironment
 from gha_toolkit.exceptions import DelimiterInjectionError
-from gha_toolkit.files import KeyValueFile
-from gha_toolkit.logger import ActionsLogger
-from gha_toolkit.oidc import OidcClient
+from gha_toolkit.files import HeredocFile
+from gha_toolkit.logger import WorkflowLogger
+from gha_toolkit.oidc import HttpOidcClient
 from gha_toolkit.sinks import StdoutSink
 
 
@@ -45,7 +45,7 @@ def _environment_with_file(
 ) -> GithubEnvironment:
     file_path.write_text('', encoding='utf-8')
     environ = {**test_environ, env_var: str(file_path)}
-    return GithubEnvironment(dict(environ))
+    return ProcessEnvironment(dict(environ))
 
 
 @pytest.mark.security
@@ -61,7 +61,7 @@ def test_delimiter_injection_does_not_corrupt_github_env_file(
     """
     env_path = tmp_path / 'env'
     environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = KeyValueFile('GITHUB_ENV', environment, delimiter)
+    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
     malicious_value = f'harmless{os.linesep}{FROZEN_DELIMITER}{os.linesep}PWNED=1{os.linesep}MYVAR<<{FROZEN_DELIMITER}'
     with pytest.raises(DelimiterInjectionError):
         env_file.set('MYVAR', malicious_value)
@@ -77,8 +77,8 @@ def test_log_message_escaping_prevents_command_smuggling(sink: WriteRecorder) ->
     unescaped newline would let the message inject a second, independently
     parsed workflow command into the log stream.
     """
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     payload = 'legitimate message\n::error::SMUGGLED\n::set-output name=pwned::1'
     logger.notice(payload)
@@ -105,8 +105,8 @@ def test_set_secret_value_never_appears_unescaped_in_sink_output(
     let the masked value's own bytes terminate the `::add-mask::` command
     early and inject an unrelated, unmasked line into the log.
     """
-    logger = ActionsLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=GithubEnvironment({})
+    logger = WorkflowLogger(
+        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
     )
     payload = 'super-sensitive\r\nvalue::with::colons'
     logger.set_secret(payload)
@@ -129,11 +129,11 @@ def test_get_id_token_masks_the_token_before_returning(
     kind of high-privilege credential that must never appear unmasked in a
     job log.
     """
-    environment = GithubEnvironment(dict(test_oidc_environ))
-    logger = ActionsLogger(
+    environment = ProcessEnvironment(dict(test_oidc_environ))
+    logger = WorkflowLogger(
         sink=StdoutSink(stream=sink), stream=sink, environment=environment
     )
-    client = OidcClient(test_token_transport, environment, logger)
+    client = HttpOidcClient(test_token_transport, environment, logger)
     returned = asyncio.run(client.get_id_token())
     assert returned == 'id-token-value'
     sink.assert_writes([f'::add-mask::id-token-value{os.linesep}'])

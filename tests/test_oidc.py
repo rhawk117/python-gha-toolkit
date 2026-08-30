@@ -22,20 +22,20 @@ from tests.fixtures.oidc import TestTokenTransport as OidcTokenTransport
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment
+from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import OidcFailureError
-from gha_toolkit.logger import ActionsLogger
-from gha_toolkit.oidc import OidcClient
+from gha_toolkit.logger import WorkflowLogger
+from gha_toolkit.oidc import HttpOidcClient, OidcClient
 from gha_toolkit.sinks import StdoutSink
 
 
 def _client(environ: Mapping[str, str], transport: OidcTokenTransport) -> OidcClient:
-    environment = GithubEnvironment(dict(environ))
+    environment = ProcessEnvironment(dict(environ))
     stream = WriteRecorder()
-    logger = ActionsLogger(
+    logger = WorkflowLogger(
         sink=StdoutSink(stream=stream), stream=stream, environment=environment
     )
-    return OidcClient(transport, environment, logger)
+    return HttpOidcClient(transport, environment, logger)
 
 
 @pytest.mark.extension
