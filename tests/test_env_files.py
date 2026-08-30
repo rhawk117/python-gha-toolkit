@@ -9,6 +9,7 @@ in 2022 -- see `gha_toolkit.files`'s module docstring), the parity tests
 delimiter-injection tests (security-marked).
 """
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -85,7 +86,11 @@ def test_export_variable_writes_heredoc_block_for_value_shape(
     environment = make_environment({'GITHUB_ENV': str(env_path)})
     env_file = make_env_file(environment, delimiter)
     env_file.set('my var', value)
-    expected = f'my var<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
+    expected = (
+        f'my var<<{FROZEN_DELIMITER}{os.linesep}'
+        f'{expected_value}{os.linesep}'
+        f'{FROZEN_DELIMITER}{os.linesep}'
+    )
     assert env_path.read_text(encoding='utf-8') == expected
 
 
@@ -186,7 +191,11 @@ def test_set_output_writes_heredoc_block_for_value_shape(
     environment = make_environment({'GITHUB_OUTPUT': str(output_path)})
     output = make_output(environment, delimiter)
     output.set('my out', value)
-    expected = f'my out<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
+    expected = (
+        f'my out<<{FROZEN_DELIMITER}{os.linesep}'
+        f'{expected_value}{os.linesep}'
+        f'{FROZEN_DELIMITER}{os.linesep}'
+    )
     assert output_path.read_text(encoding='utf-8') == expected
 
 
@@ -272,7 +281,11 @@ def test_save_state_writes_heredoc_block_for_value_shape(
     environment = make_environment({'GITHUB_STATE': str(state_path)})
     state = make_state(environment, delimiter)
     state.save('my state', value)
-    expected = f'my state<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
+    expected = (
+        f'my state<<{FROZEN_DELIMITER}{os.linesep}'
+        f'{expected_value}{os.linesep}'
+        f'{FROZEN_DELIMITER}{os.linesep}'
+    )
     assert state_path.read_text(encoding='utf-8') == expected
 
 

@@ -28,6 +28,10 @@ not ported here. A missing `GITHUB_ENV` / `GITHUB_OUTPUT` / `GITHUB_STATE` /
 :class:`gha_toolkit.exceptions.MissingRunnerFileError` -- there is no stdout
 fallback anywhere in this module.
 
+File-command EOLs are `os.linesep`, matching upstream `os.EOL`
+(file-command.ts:46); the read-layer assertions that verify those writes use
+text-mode `read_text`.
+
 This is an interface-only module: every behavior method on the concrete
 stubs raises ``NotImplementedError``. `ActionsFile`, `KeyValueFile`,
 `PathFile`, and `StepSummaryFile` are protocols -- there is no behavior to

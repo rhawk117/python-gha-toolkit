@@ -40,6 +40,6 @@ pre-commit:
 		pre-commit run --all-files --show-diff-on-failure
 
 .PHONY: hooks
-pre-commit.hooks:
+hooks:
 	$(UV) run --group check \
 		pre-commit install --install-hooks
