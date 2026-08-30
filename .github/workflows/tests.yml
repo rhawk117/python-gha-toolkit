@@ -1,0 +1,39 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - develop
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.11' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pytest:
+    name: Test Suite
+    runs-on: ${{ vars.DEFAULT_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 10
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install UV & Python
+        uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
+        with:
+          enable-cache: true
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Sync Dependency Group (test)
+        run: uv sync --locked --group test
+
+      - name: Run Tests
+        run: uv run pytest

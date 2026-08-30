@@ -1,7 +1,9 @@
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import pytest
+
+from gha_toolkit.environment import ProcessEnvironment
 
 
 @pytest.fixture
@@ -76,11 +78,6 @@ def fake_oidc_dotenv_vars() -> Mapping[str, str]:
 
 
 @pytest.fixture
-def eol() -> str:
-    return os.linesep
-
-
-@pytest.fixture
 def test_environ(
     fake_runner_dotenv_vars: Mapping[str, str],
     fake_toolkit_dotenv_vars: Mapping[str, str],
@@ -90,19 +87,38 @@ def test_environ(
 
 @pytest.fixture
 def test_oidc_environ(
-    environ: Mapping[str, str], fake_oidc_dotenv_vars: Mapping[str, str]
+    test_environ: Mapping[str, str], fake_oidc_dotenv_vars: Mapping[str, str]
 ) -> Mapping[str, str]:
-    return {**environ, **fake_oidc_dotenv_vars}
+    return {**test_environ, **fake_oidc_dotenv_vars}
 
 
 @pytest.fixture
-def fake_os_environ(
-    monkeypatch: pytest.MonkeyPatch, test_environ: Mapping[str, str]
-) -> Mapping[str, str]:
-    for key in list(os.environ):
-        monkeypatch.delenv(key, raising=False)
+def empty_environment() -> ProcessEnvironment:
+    """A `ProcessEnvironment` with no bound vars, for tests that only care about
+    command rendering and never touch a runner file or `INPUT_*`/`GITHUB_*` var.
+    """
+    return ProcessEnvironment({})
 
-    for key, value in test_environ.items():
-        monkeypatch.setenv(key, value)
 
-    return test_environ
+@pytest.fixture
+def make_environment(
+    test_environ: Mapping[str, str],
+) -> Callable[..., ProcessEnvironment]:
+    """Factory for a `ProcessEnvironment` layered over `test_environ`."""
+
+    def _make(overrides: Mapping[str, str] | None = None) -> ProcessEnvironment:
+        return ProcessEnvironment({**test_environ, **(overrides or {})})
+
+    return _make
+
+
+@pytest.fixture
+def make_oidc_environment(
+    test_oidc_environ: Mapping[str, str],
+) -> Callable[..., ProcessEnvironment]:
+    """Factory for a `ProcessEnvironment` layered over `test_oidc_environ`."""
+
+    def _make(overrides: Mapping[str, str] | None = None) -> ProcessEnvironment:
+        return ProcessEnvironment({**test_oidc_environ, **(overrides or {})})
+
+    return _make

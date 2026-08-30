@@ -1,7 +1,7 @@
 [environment]
 python-version = "3.11"
 python-platform = "all"
-root = ["./src"]
+root = ["./src", "."]
 
 [src]
 include = ["src", "tests"]
