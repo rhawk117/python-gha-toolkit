@@ -7,7 +7,7 @@ Every function in this module is a thin wrapper: it resolves the current
 and delegates to exactly one of that runtime's nine composed services'
 methods. There is no class here for a user to instantiate:
 `from gha_toolkit import core; core.info('hello')` / `core.get_context()` /
-`core.get_inputs(MyInputs)` is the complete surface this module offers,
+`core.bind_inputs(MyInputs)` is the complete surface this module offers,
 mirroring how upstream `@actions/core` is consumed as a flat module of
 functions, not a class.
 
@@ -16,9 +16,12 @@ Parity surface: every function upstream `core.ts` exports at module scope
 `exportVariable`, `addPath`, `saveState`, `getState`, `setSecret`,
 `setCommandEcho`, `setFailed`, `isDebug`, `debug`/`info`/`notice`/`warning`/
 `error`, `startGroup`/`endGroup`/`group`) plus this package's own additions
-(`get_context`, `get_inputs`, an async `get_id_token`, and a step-summary
-accessor). `group` is a context manager, not upstream's async wrapper
-function -- see `gha_toolkit.logger.ActionsLogger.group` for why.
+(`get_context`, `bind_inputs`, an async `get_id_token`, and a step-summary
+accessor). `get_input` keeps its upstream-parity name; `bind_inputs`, this
+package's own dataclass-binding addition, is named for what it does --
+binding a whole set of named inputs onto one typed object -- distinct from
+`get_input`'s single-value read. `group` is a context manager, not upstream's async wrapper
+function -- see `gha_toolkit.logger`'s module docstring for why.
 
 This is an interface-only module: every function below raises
 ``NotImplementedError``.
@@ -53,7 +56,7 @@ def get_context() -> GitHubContext:
     raise NotImplementedError
 
 
-def get_inputs(model_type: type[ModelT]) -> ModelT:
+def bind_inputs(model_type: type[ModelT]) -> ModelT:
     raise NotImplementedError
 
 

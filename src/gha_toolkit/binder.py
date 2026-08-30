@@ -8,7 +8,15 @@ of this one primitive, rather than its own bespoke parsing logic:
 - :func:`get_context` -- binds `gha_toolkit.context.GitHubContext` from the
   process environment's `GITHUB_*` runner variables (stripped of their
   prefix; see `gha_toolkit.context`'s module docstring), plus the separately
-  loaded `event` field.
+  loaded `event` field. `run_attempt`, `run_number`, and `run_id` -- the
+  three `int`-typed fields -- are parsed as `int` from their string
+  environment values. `api_url`, `server_url`, and `graphql_url` fall back
+  to `GitHubContext`'s declared defaults (`https://api.github.com`,
+  `https://github.com`, `https://api.github.com/graphql`) when their
+  runner variables are unset, rather than raising. `event` has no
+  runner-variable counterpart: it is populated separately, by loading and
+  parsing `GITHUB_EVENT_PATH`'s JSON payload into a
+  `gha_toolkit.events.WebhookEvent`, not by :func:`bind`.
 - :func:`get_inputs` -- binds a caller-supplied dataclass from the process
   environment's `INPUT_*` step-input variables, per field :class:`Input`
   metadata -- the dataclass-shaped counterpart to

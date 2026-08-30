@@ -8,13 +8,13 @@ from typing import TYPE_CHECKING
 import pytest
 
 from gha_toolkit.environment import GithubEnvironment
-from gha_toolkit.files import ActionsFiles
+from gha_toolkit.files import RunnerFiles
 from gha_toolkit.inputs import EnvInputs
 from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.oidc import HttpOidcClient
 from gha_toolkit.runtime import ActionsRuntime
 from gha_toolkit.services import RunnerPaths, StepOutput, StepState
-from gha_toolkit.summary import StepSummaryWriter
+from gha_toolkit.summary import HtmlSummaryBuffer, StepSummaryWriter
 
 if TYPE_CHECKING:
     from tests.fixtures.oidc import TestTokenTransport
@@ -42,7 +42,7 @@ def counting_delimiter() -> Callable[[], str]:
 @pytest.fixture
 def make_runtime(
     make_logger: Callable[[WriteRecorder, GithubEnvironment], WorkflowLogger],
-    make_actions_files: Callable[[GithubEnvironment, Callable[[], str]], ActionsFiles],
+    make_runner_files: Callable[[GithubEnvironment, Callable[[], str]], RunnerFiles],
     make_inputs: Callable[[GithubEnvironment], EnvInputs],
     make_oidc_client: Callable[
         [TestTokenTransport, GithubEnvironment, WorkflowLogger], HttpOidcClient
@@ -65,7 +65,7 @@ def make_runtime(
         token_transport: TestTokenTransport,
     ) -> ActionsRuntime:
         logger = make_logger(stream, environment)
-        files = make_actions_files(environment, delimiter)
+        files = make_runner_files(environment, delimiter)
         return ActionsRuntime(
             inputs=make_inputs(environment),
             logger=logger,
@@ -74,7 +74,7 @@ def make_runtime(
             paths=RunnerPaths(files.path, environment),
             files=files,
             environment=environment,
-            step_summary=StepSummaryWriter(files.step_summary),
+            step_summary=StepSummaryWriter(files.step_summary, HtmlSummaryBuffer()),
             oidc=make_oidc_client(token_transport, environment, logger),
         )
 

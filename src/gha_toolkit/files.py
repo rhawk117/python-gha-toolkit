@@ -8,10 +8,11 @@ the job summary. This module defines that hierarchy as protocols:
 :class:`ActionsFile`, the shared generic base; :class:`KeyValueFile`,
 :class:`PathFile`, and :class:`StepSummaryFile`, its three shapes. Their
 minimal concrete stubs are :class:`HeredocFile`, :class:`PathListFile`, and
-:class:`SummaryFile` respectively. :class:`ActionsFiles` is the resolved
-bundle of all five that a runtime hands to its services; building one from a
-bound :class:`gha_toolkit.environment.GithubEnvironment` is
-:func:`resolve_actions_files`'s job, not a classmethod on the bundle.
+:class:`SummaryFile` respectively. :class:`RunnerFiles` is the resolved
+bundle of all five that a runtime hands to its services; its five fields are
+built and passed in directly by `gha_toolkit.runtime.create_runtime`, the
+composition root, from a bound
+:class:`gha_toolkit.environment.GithubEnvironment`.
 
 Ported from ``.original/toolkit/packages/core/src/file-command.ts`` (the
 `GITHUB_ENV` / `GITHUB_OUTPUT` / `GITHUB_STATE` heredoc protocol and the
@@ -58,10 +59,6 @@ class ActionsFile(Protocol[FileContentT_co]):
 class KeyValueFile(ActionsFile[Mapping[str, str]], Protocol):
     def set(self, key: str, value: OutputValue) -> None: ...
 
-    def __setitem__(self, key: str, value: OutputValue) -> None: ...
-
-    def merge(self, mapping: Mapping[str, OutputValue]) -> None: ...
-
 
 @runtime_checkable
 class PathFile(ActionsFile[Sequence[str]], Protocol):
@@ -70,8 +67,6 @@ class PathFile(ActionsFile[Sequence[str]], Protocol):
 
 @runtime_checkable
 class StepSummaryFile(ActionsFile[str], Protocol):
-    def write(self, content: str, *, overwrite: bool = False) -> None: ...
-
     def clear(self) -> None: ...
 
 
@@ -88,12 +83,6 @@ class HeredocFile:
         raise NotImplementedError
 
     def set(self, key: str, value: OutputValue) -> None:
-        raise NotImplementedError
-
-    def __setitem__(self, key: str, value: OutputValue) -> None:
-        raise NotImplementedError
-
-    def merge(self, mapping: Mapping[str, OutputValue]) -> None:
         raise NotImplementedError
 
 
@@ -123,21 +112,14 @@ class SummaryFile:
     def update(self, content: str, *, overwrite: bool = False) -> None:
         raise NotImplementedError
 
-    def write(self, content: str, *, overwrite: bool = False) -> None:
-        raise NotImplementedError
-
     def clear(self) -> None:
         raise NotImplementedError
 
 
 @dataclasses.dataclass(slots=True)
-class ActionsFiles:
+class RunnerFiles:
     env: KeyValueFile
     output: KeyValueFile
     state: KeyValueFile
     path: PathFile
     step_summary: StepSummaryFile
-
-
-def resolve_actions_files(environment: GithubEnvironment) -> ActionsFiles:
-    raise NotImplementedError

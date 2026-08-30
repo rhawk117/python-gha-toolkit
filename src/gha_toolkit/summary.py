@@ -6,6 +6,19 @@ I/O that flushes that buffer to the `GITHUB_STEP_SUMMARY` file (`write`,
 `clear`). This module keeps the buffer -- :class:`ActionSummary` -- and the
 I/O separate.
 
+:class:`SummaryBuffer` is the narrow lifecycle trio -- `stringify`,
+`is_empty`, `clear` -- that :meth:`StepSummaryWriter.write` and
+:meth:`StepSummaryWriter.clear`'s own bodies actually call on their bound
+buffer; :class:`ActionSummary` extends it with the fluent element-builder
+methods (`add_raw`, `add_heading`, `add_table`, ...) that a caller holding a
+`StepSummaryWriter` also needs through the same `buffer` attribute to build
+content in the first place (`step_summary.buffer.add_raw(...)`, the pattern
+every call site in this package uses). `StepSummaryWriter.buffer` is
+therefore typed against the wider `ActionSummary`, not the narrow
+`SummaryBuffer`, even though the writer's own internal contract only draws
+on the narrow trio -- narrowing the field itself would take builder access
+away from every external caller through the one attribute they have.
+
 :class:`ActionSummary` is a protocol for a pure, reusable, in-memory string
 builder with no knowledge of any runner file; its minimal concrete stub,
 :class:`HtmlSummaryBuffer`, can be constructed and used anywhere, including
@@ -14,7 +27,10 @@ rendering). :class:`ActionStepSummary` is the protocol for the file-bound
 half: it binds an `ActionSummary`-shaped buffer together with a
 :class:`gha_toolkit.files.StepSummaryFile` and owns `write()` / `clear()` --
 the operations that actually touch the `GITHUB_STEP_SUMMARY` file; its
-minimal concrete stub is :class:`StepSummaryWriter`.
+minimal concrete stub is :class:`StepSummaryWriter`, whose `buffer` is a
+required constructor argument -- `gha_toolkit.runtime.create_runtime` is the
+composition root that supplies `HtmlSummaryBuffer` as the default buffer
+implementation, not a default on this dataclass.
 
 This split is a design decision of record, not an upstream detail: nothing in
 `summary.ts` separates the buffer from the file. It exists so
@@ -60,7 +76,16 @@ SummaryTableRow = Sequence[SummaryTableCell | str]
 
 
 @runtime_checkable
-class ActionSummary(Protocol):
+class SummaryBuffer(Protocol):
+    def stringify(self) -> str: ...
+
+    def is_empty(self) -> bool: ...
+
+    def clear(self) -> Self: ...
+
+
+@runtime_checkable
+class ActionSummary(SummaryBuffer, Protocol):
     def add_raw(self, text: str, *, add_eol: bool = False) -> Self: ...
 
     def add_eol(self) -> Self: ...
@@ -86,12 +111,6 @@ class ActionSummary(Protocol):
     def add_quote(self, text: str, cite: str | None = None) -> Self: ...
 
     def add_link(self, text: str, href: str) -> Self: ...
-
-    def stringify(self) -> str: ...
-
-    def is_empty_buffer(self) -> bool: ...
-
-    def empty_buffer(self) -> Self: ...
 
 
 @dataclasses.dataclass(slots=True)
@@ -150,10 +169,10 @@ class HtmlSummaryBuffer:
     def stringify(self) -> str:
         raise NotImplementedError
 
-    def is_empty_buffer(self) -> bool:
+    def is_empty(self) -> bool:
         raise NotImplementedError
 
-    def empty_buffer(self) -> Self:
+    def clear(self) -> Self:
         raise NotImplementedError
 
 
@@ -169,7 +188,7 @@ class ActionStepSummary(Protocol):
 @dataclasses.dataclass(slots=True)
 class StepSummaryWriter:
     step_summary_file: StepSummaryFile
-    buffer: ActionSummary = dataclasses.field(default_factory=HtmlSummaryBuffer)
+    buffer: ActionSummary
 
     def write(self, *, overwrite: bool = False) -> Self:
         raise NotImplementedError

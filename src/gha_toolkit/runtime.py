@@ -2,7 +2,7 @@
 
 Every other module in this package defines an isolated seam or service --
 `ActionsInputs`, `ActionsLogger`, `ActionsOutput`/`ActionsState`/`ActionsPaths`,
-`ActionsFiles`, `GithubEnvironment`, `ActionStepSummary`, `OidcClient` -- each
+`RunnerFiles`, `GithubEnvironment`, `ActionStepSummary`, `OidcClient` -- each
 a protocol with a minimal concrete stub, constructor-injectable and
 independently testable. This module is where they get wired together into
 one object a step actually uses: :class:`ActionsRuntime` holds the nine
@@ -10,7 +10,12 @@ composed services as public attributes, each annotated against its protocol
 rather than a concrete stub; :func:`create_runtime` is the one place that
 knows how to build a real, environment-backed instance of it, with
 injectable overrides for the seams that need one for tests (`environ`,
-`sink`, `delimiter_factory`, `token_transport`); and the module-level
+`sink`, `delimiter_factory`, `token_transport`). It is also the composition
+root that supplies `gha_toolkit.summary.HtmlSummaryBuffer` as the concrete
+buffer bound into `step_summary`'s `StepSummaryWriter` -- `StepSummaryWriter`
+takes `buffer` as a required constructor argument rather than defaulting to
+a concrete type itself, so this module is the only place a concrete buffer
+implementation is named. The module-level
 `contextvars.ContextVar` seam -- :func:`current_runtime` / :func:`use_runtime`
 -- is how `gha_toolkit.core`'s module-level facade functions find "the"
 runtime to delegate to, without a global mutable singleton or a monkeypatched
@@ -35,7 +40,7 @@ import dataclasses
 from collections.abc import Callable, MutableMapping
 
 from gha_toolkit.environment import GithubEnvironment
-from gha_toolkit.files import ActionsFiles
+from gha_toolkit.files import RunnerFiles
 from gha_toolkit.inputs import ActionsInputs
 from gha_toolkit.logger import ActionsLogger
 from gha_toolkit.oidc import OidcClient, TokenTransport
@@ -51,7 +56,7 @@ class ActionsRuntime:
     output: ActionsOutput
     state: ActionsState
     paths: ActionsPaths
-    files: ActionsFiles
+    files: RunnerFiles
     environment: GithubEnvironment
     step_summary: ActionStepSummary
     oidc: OidcClient

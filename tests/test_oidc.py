@@ -8,9 +8,8 @@ This port's `OidcClient` takes its `TokenTransport` as a constructor argument
 instead (see `gha_toolkit.oidc` module docstring), so there is no equivalent
 "build an HTTP client" seam left to test -- those two upstream cases are not
 cleanly mappable and are intentionally not ported. In their place, this file
-exercises the documented `get_id_token` contract (`gha_toolkit/oidc.py`,
-`OidcClient.get_id_token` docstring, steps 1-6) directly against the fake
-`TestTokenTransport`.
+exercises the documented `get_id_token` contract (`gha_toolkit/oidc.py`
+module docstring, steps 1-6) directly against the fake `TestTokenTransport`.
 """
 
 import asyncio

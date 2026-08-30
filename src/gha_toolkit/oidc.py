@@ -20,6 +20,37 @@ client's -- :class:`HttpOidcClient` calls its bound :class:`TokenTransport`
 exactly once per :meth:`OidcClient.get_id_token` call and leaves any
 retrying to that transport.
 
+:meth:`HttpOidcClient.get_id_token` full contract, steps 1-6 (parity with
+`oidc-utils.ts:66-84`):
+
+1. Resolve the bearer credential via
+   ``environment.get('ACTIONS_ID_TOKEN_REQUEST_TOKEN')``. Missing or empty
+   raises :class:`gha_toolkit.exceptions.OidcFailureError` before any
+   request is issued.
+2. Resolve the request URL via
+   ``environment.get('ACTIONS_ID_TOKEN_REQUEST_URL')``. Missing or empty
+   raises `OidcFailureError` the same way, before any request is issued.
+3. When `audience` is not `None`, URL-encode it and append it to the
+   resolved URL as the literal suffix `'&audience={encoded_audience}'` -- an
+   `&`, not a `?`, even though the URL has not otherwise been given a query
+   string by this method. This is upstream parity, not a bug: the
+   runner-provided `ACTIONS_ID_TOKEN_REQUEST_URL` already carries its own
+   query string, so appending with `&` is correct for every real request
+   even though it looks wrong in isolation.
+4. Emit `logger.debug(f'ID token url is {resolved_url}')` before issuing the
+   request.
+5. Call `transport.get(resolved_url, bearer=bearer, timeout=self.timeout)`.
+   An exception raised by the transport is caught and re-raised as
+   `OidcFailureError`, chained from the original.
+6. Parse the response body as JSON and read its `'value'` field. A response
+   that is not valid JSON, or is valid JSON missing `'value'` (or with it
+   empty), raises `OidcFailureError`; otherwise `logger.set_secret(token)`
+   masks the token in subsequent log output and the token is returned.
+
+Retry policy is deliberately absent from this contract, as above: retrying
+(if any) is the bound :class:`TokenTransport` implementation's
+responsibility, calling `transport.get` exactly once per invocation.
+
 This is an interface-only module: :meth:`HttpOidcClient.get_id_token` raises
 ``NotImplementedError``. :class:`TokenTransport` and :class:`OidcClient` are
 protocols -- there is no behavior to implement, only shape to satisfy.

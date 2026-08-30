@@ -12,7 +12,19 @@ This is an interface-only module: every function below raises ``NotImplementedEr
 Only pure data definitions (the dataclass field lists, the enum) are real.
 `AnnotationOptions`'s validation logic lives in the module-level
 :func:`make_annotation_options` factory function, not in the dataclass's
-constructor -- see that function for the invariants it enforces.
+constructor. Invariants it enforces (decisions of record -- issue #4
+decision 5 -- the upstream TypeScript interface documented these as caller
+responsibility but never enforced them):
+
+- `end_line` defaults to `start_line` when a start line is given but no end
+  line is.
+- `end_column` defaults to `start_column` when a start column is given but
+  no end column is.
+- `start_column`/`end_column` must not be set when `start_line` and
+  `end_line` differ -- a column position is only meaningful within a
+  single-line span.
+
+Violating an invariant raises :class:`gha_toolkit.exceptions.InvalidAnnotationError`.
 
 Ported from ``.original/toolkit/packages/core/src/{utils,command,core}.ts``; parity
 is byte-level on rendered command strings.

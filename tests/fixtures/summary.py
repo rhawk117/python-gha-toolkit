@@ -18,7 +18,9 @@ def summary_buffer() -> HtmlSummaryBuffer:
 @pytest.fixture
 def make_step_summary() -> Callable[[GithubEnvironment], StepSummaryWriter]:
     def _make(environment: GithubEnvironment) -> StepSummaryWriter:
-        return StepSummaryWriter(SummaryFile('GITHUB_STEP_SUMMARY', environment))
+        return StepSummaryWriter(
+            SummaryFile('GITHUB_STEP_SUMMARY', environment), HtmlSummaryBuffer()
+        )
 
     return _make
 

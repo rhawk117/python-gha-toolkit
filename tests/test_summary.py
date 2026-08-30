@@ -2,7 +2,7 @@
 file binding), ported from summary.test.ts.
 
 File-backed cases use the `step_summary` fixture, a `StepSummaryWriter` bound
-to a real `tmp_path` file; buffer-only cases (`stringify`, `is_empty_buffer`)
+to a real `tmp_path` file; buffer-only cases (`stringify`, `is_empty`)
 use the bare `summary_buffer` fixture with no file at all, matching
 upstream's split between `summary.write()`-flushed assertions and pure
 in-memory buffer assertions.
@@ -107,7 +107,7 @@ def test_empties_buffer_after_write(step_summary: StepSummaryWriter) -> None:
     """upstream: summary.test.ts: 'empties buffer after write'"""
     step_summary.buffer.add_raw(TEXT)
     step_summary.write()
-    assert step_summary.buffer.is_empty_buffer() is True
+    assert step_summary.buffer.is_empty() is True
 
 
 @pytest.mark.parity
@@ -120,14 +120,14 @@ def test_returns_summary_buffer_as_string(summary_buffer: HtmlSummaryBuffer) -> 
 
 @pytest.mark.parity
 @pending
-def test_returns_correct_values_for_is_empty_buffer(
+def test_returns_correct_values_for_is_empty(
     summary_buffer: HtmlSummaryBuffer,
 ) -> None:
     """upstream: summary.test.ts: 'return correct values for isEmptyBuffer'"""
     summary_buffer.add_raw(TEXT)
-    assert summary_buffer.is_empty_buffer() is False
-    summary_buffer.empty_buffer()
-    assert summary_buffer.is_empty_buffer() is True
+    assert summary_buffer.is_empty() is False
+    summary_buffer.clear()
+    assert summary_buffer.is_empty() is True
 
 
 @pytest.mark.parity
@@ -135,7 +135,7 @@ def test_returns_correct_values_for_is_empty_buffer(
 def test_clears_a_buffer_and_summary_file(step_summary: StepSummaryWriter) -> None:
     """upstream: summary.test.ts: 'clears a buffer and summary file'"""
     step_summary.clear()
-    assert step_summary.buffer.is_empty_buffer() is True
+    assert step_summary.buffer.is_empty() is True
 
 
 @pytest.mark.parity

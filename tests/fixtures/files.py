@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from gha_toolkit.environment import GithubEnvironment
-from gha_toolkit.files import ActionsFiles, HeredocFile, PathListFile, SummaryFile
+from gha_toolkit.files import HeredocFile, PathListFile, RunnerFiles, SummaryFile
 from gha_toolkit.services import RunnerPaths, StepOutput, StepState
 
 
@@ -78,13 +78,13 @@ def make_paths() -> Callable[[GithubEnvironment], RunnerPaths]:
 
 
 @pytest.fixture
-def make_actions_files() -> Callable[
-    [GithubEnvironment, Callable[[], str]], ActionsFiles
+def make_runner_files() -> Callable[
+    [GithubEnvironment, Callable[[], str]], RunnerFiles
 ]:
     def _make(
         environment: GithubEnvironment, delimiter: Callable[[], str]
-    ) -> ActionsFiles:
-        return ActionsFiles(
+    ) -> RunnerFiles:
+        return RunnerFiles(
             env=HeredocFile('GITHUB_ENV', environment, delimiter),
             output=HeredocFile('GITHUB_OUTPUT', environment, delimiter),
             state=HeredocFile('GITHUB_STATE', environment, delimiter),

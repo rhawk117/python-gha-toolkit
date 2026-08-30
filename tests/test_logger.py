@@ -235,7 +235,7 @@ def test_group_wraps_a_call_in_a_group(
     """upstream: core.test.ts: 'group wraps an async call in a group'
 
     Adapted from upstream's async wrapper function to a synchronous context
-    manager -- see `ActionsLogger.group`'s docstring for why.
+    manager -- see `gha_toolkit.logger`'s module docstring for why.
     """
     logger = make_logger(sink, empty_environment)
     with logger.group('mygroup'):

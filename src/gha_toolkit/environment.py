@@ -32,8 +32,6 @@ from typing import Protocol, runtime_checkable
 class GithubEnvironment(Protocol):
     def get(self, name: str, default: str | None = None) -> str | None: ...
 
-    def require(self, name: str) -> str: ...
-
     def set(self, name: str, value: str) -> None: ...
 
 
@@ -44,9 +42,6 @@ class ProcessEnvironment:
     )
 
     def get(self, name: str, default: str | None = None) -> str | None:
-        raise NotImplementedError
-
-    def require(self, name: str) -> str:
         raise NotImplementedError
 
     def set(self, name: str, value: str) -> None:
