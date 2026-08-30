@@ -14,8 +14,13 @@ import pytest
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
-from gha_toolkit.commands import ActionCommand, AnnotationOptions
+from gha_toolkit.commands import (
+    ActionCommand,
+    AnnotationOptions,
+    make_annotation_options,
+)
 from gha_toolkit.environment import ProcessEnvironment
+from gha_toolkit.exceptions import InvalidAnnotationError
 from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.sinks import StdoutSink
 
@@ -234,3 +239,29 @@ def test_annotations_map_field_names_correctly(
             )
         ]
     )
+
+
+@pytest.mark.extension
+@pending
+@pytest.mark.parametrize(
+    ('start_column', 'end_column'),
+    [
+        pytest.param(1, None, id='start_column_only'),
+        pytest.param(None, 2, id='end_column_only'),
+        pytest.param(1, 2, id='both_columns'),
+    ],
+)
+def test_make_annotation_options_rejects_columns_when_lines_differ(
+    start_column: int | None, end_column: int | None
+) -> None:
+    """Documented invariant (commands.py module docstring): `start_column`/
+    `end_column` must not be set when `start_line` and `end_line` differ -- a
+    column position is only meaningful within a single-line span.
+    """
+    with pytest.raises(InvalidAnnotationError):
+        make_annotation_options(
+            start_line=1,
+            end_line=2,
+            start_column=start_column,
+            end_column=end_column,
+        )

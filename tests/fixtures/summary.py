@@ -26,14 +26,21 @@ def make_step_summary() -> Callable[[GithubEnvironment], StepSummaryWriter]:
 
 
 @pytest.fixture
+def step_summary_path(runner_file_path: Callable[[str], Path]) -> Path:
+    """The real, empty `GITHUB_STEP_SUMMARY` file `step_summary` is bound to --
+    exposed separately so a test can read back what `write()` wrote.
+    """
+    return runner_file_path('test-summary.md')
+
+
+@pytest.fixture
 def step_summary(
     make_environment: Callable[..., ProcessEnvironment],
-    runner_file_path: Callable[[str], Path],
+    step_summary_path: Path,
     make_step_summary: Callable[[GithubEnvironment], StepSummaryWriter],
 ) -> StepSummaryWriter:
     """A `StepSummaryWriter` bound to a real, empty `GITHUB_STEP_SUMMARY` file --
     the shape every summary test but the two undefined/missing-file cases needs.
     """
-    summary_path = runner_file_path('test-summary.md')
-    environment = make_environment({'GITHUB_STEP_SUMMARY': str(summary_path)})
+    environment = make_environment({'GITHUB_STEP_SUMMARY': str(step_summary_path)})
     return make_step_summary(environment)
