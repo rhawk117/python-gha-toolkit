@@ -1,0 +1,74 @@
+"""Typed exception hierarchy for gha_toolkit.
+
+Every exception raised by a public gha_toolkit API is an instance of
+:class:`GhaToolkitError` or one of the subclasses defined here, so callers can catch
+a single type to handle any toolkit-raised failure. Each subclass corresponds to one
+semantic failure mode; catching the specific subclass lets callers distinguish, for
+example, a missing required input from a broken runner file handoff.
+"""
+
+
+class GhaToolkitError(Exception):
+    """Base class for every exception raised by gha_toolkit.
+
+    Never raised directly; always raised as one of the typed subclasses below.
+    Catching this type catches any gha_toolkit-raised failure without also
+    swallowing unrelated exceptions raised by other libraries or user code.
+    """
+
+
+class MissingInputError(GhaToolkitError):
+    """Raised when a required workflow input has no value.
+
+    Mirrors the upstream `@actions/core` `getInput({ required: true })` contract:
+    requesting a required input that is absent, or empty after whitespace trimming,
+    raises this instead of silently returning an empty string.
+    """
+
+
+class MissingRunnerFileError(GhaToolkitError):
+    """Raised when a runner-provided command-file environment variable is unset.
+
+    File-based workflow commands (environment variables such as ``GITHUB_ENV``,
+    ``GITHUB_OUTPUT``, ``GITHUB_PATH``, ``GITHUB_STATE``, and
+    ``GITHUB_STEP_SUMMARY``) depend on the runner exporting a path to a writable
+    temp file. This is raised when the corresponding environment variable is
+    missing or empty, so the caller learns immediately instead of attempting to
+    write to a nonexistent path.
+    """
+
+
+class DelimiterInjectionError(GhaToolkitError):
+    """Raised when a value would corrupt a runner file's delimiter framing.
+
+    File commands write ``name<<EOF\\nvalue\\nEOF`` heredoc-style blocks. A value
+    that itself contains the generated delimiter could truncate or corrupt the
+    written command. This is raised instead of writing an unsafe payload.
+    """
+
+
+class SummaryAccessError(GhaToolkitError):
+    """Raised when the job step summary file is accessed but unavailable.
+
+    Writing to the job summary requires the runner to have set
+    ``GITHUB_STEP_SUMMARY``. This is raised when a summary operation is attempted
+    without that environment variable present.
+    """
+
+
+class OidcFailureError(GhaToolkitError):
+    """Raised when requesting an OpenID Connect token from the runner fails.
+
+    Covers both missing ``ACTIONS_ID_TOKEN_REQUEST_URL`` /
+    ``ACTIONS_ID_TOKEN_REQUEST_TOKEN`` environment variables and non-success
+    responses returned by the OIDC token endpoint itself.
+    """
+
+
+class InvalidAnnotationError(GhaToolkitError):
+    """Raised when annotation options violate a documented invariant.
+
+    Raised when ``start_column`` or ``end_column`` is set while ``start_line`` and
+    ``end_line`` differ, or when another invariant documented on
+    :class:`gha_toolkit.commands.AnnotationOptions` is violated.
+    """
