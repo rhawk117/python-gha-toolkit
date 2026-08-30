@@ -43,6 +43,3 @@ output_values = st.one_of(
 )
 
 heading_levels = st.one_of(st.integers(min_value=-5, max_value=12), st.text(max_size=5))
-
-posix_paths = st.lists(command_names, min_size=1, max_size=5).map('/'.join)
-win32_paths = st.lists(command_names, min_size=1, max_size=5).map('\\'.join)
