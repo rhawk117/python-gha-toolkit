@@ -1,12 +1,13 @@
 """Workflow input access, ported from core.test.ts's `getInput`/`getBooleanInput`/
 `getMultilineInput` cases.
 
-Every stub builds an `ActionsInputs` directly over a `GithubEnvironment` bound
-to `test_environ` (the merged runner + toolkit fixture dotenv vars), then
-calls the stock accessor the upstream test exercises.
+Every stub builds an `EnvInputs` directly over a `GithubEnvironment` bound to
+`test_environ` (the merged runner + toolkit fixture dotenv vars, via
+`make_environment`), then calls the stock accessor the upstream test
+exercises.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable
 
 import pytest
 from tests.markers import pending
@@ -18,27 +19,75 @@ from gha_toolkit.inputs import EnvInputs
 
 @pytest.mark.parity
 @pending
-def test_get_input_gets_non_required_input(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput gets non-required input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('my input') == 'val'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_gets_required_input(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput gets required input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('my input', required=True) == 'val'
+@pytest.mark.parametrize(
+    ('name', 'required', 'trim', 'expected'),
+    [
+        pytest.param('my input', False, True, 'val', id='non_required'),
+        pytest.param('my input', True, True, 'val', id='required'),
+        pytest.param('My InPuT', False, True, 'val', id='case_insensitive'),
+        pytest.param(
+            'special chars_\'\t"\\',
+            False,
+            True,
+            '\'\t"\\ response',
+            id='special_characters',
+        ),
+        pytest.param(
+            'multiple spaces variable',
+            False,
+            True,
+            'I have multiple spaces',
+            id='multiple_spaces',
+        ),
+        pytest.param(
+            'with trailing whitespace', False, True, 'some val', id='trims_by_default'
+        ),
+        pytest.param(
+            'with trailing whitespace',
+            False,
+            True,
+            'some val',
+            id='trims_when_explicitly_true',
+        ),
+        pytest.param(
+            'with trailing whitespace',
+            False,
+            False,
+            '  some val  ',
+            id='does_not_trim_when_false',
+        ),
+    ],
+)
+def test_get_input_returns_the_expected_string(
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
+    name: str,
+    *,
+    required: bool,
+    trim: bool,
+    expected: str,
+) -> None:
+    """upstream: core.test.ts: 'getInput gets non-required input'
+    upstream: core.test.ts: 'getInput gets required input'
+    upstream: core.test.ts: 'getInput is case insensitive'
+    upstream: core.test.ts: 'getInput handles special characters'
+    upstream: core.test.ts: 'getInput handles multiple spaces'
+    upstream: core.test.ts: 'getInput trims whitespace by default'
+    upstream: core.test.ts: 'getInput trims whitespace when option is explicitly true'
+    upstream: core.test.ts: 'getInput does not trim whitespace when option is false'
+    """
+    inputs = make_inputs(make_environment())
+    assert inputs.get_string(name, required=required, trim=trim) == expected
 
 
 @pytest.mark.parity
 @pending
 def test_get_input_throws_on_missing_required_input(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getInput throws on missing required input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     with pytest.raises(MissingInputError):
         inputs.get_string('missing', required=True)
 
@@ -46,102 +95,66 @@ def test_get_input_throws_on_missing_required_input(
 @pytest.mark.parity
 @pending
 def test_get_input_does_not_throw_on_missing_non_required_input(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getInput does not throw on missing non-required input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_string('missing', required=False) == ''
 
 
 @pytest.mark.parity
 @pending
-def test_get_input_is_case_insensitive(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput is case insensitive'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('My InPuT') == 'val'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_handles_special_characters(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput handles special characters'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('special chars_\'\t"\\') == '\'\t"\\ response'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_handles_multiple_spaces(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput handles multiple spaces'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('multiple spaces variable') == 'I have multiple spaces'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_trims_whitespace_by_default(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'getInput trims whitespace by default'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('with trailing whitespace') == 'some val'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_trims_whitespace_when_option_explicitly_true(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'getInput trims whitespace when option is explicitly true'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('with trailing whitespace', trim=True) == 'some val'
-
-
-@pytest.mark.parity
-@pending
-def test_get_input_does_not_trim_whitespace_when_option_false(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'getInput does not trim whitespace when option is false'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_string('with trailing whitespace', trim=False) == '  some val  '
-
-
-@pytest.mark.parity
-@pending
 def test_get_input_gets_non_required_boolean_input(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getInput gets non-required boolean input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_boolean('boolean input') is True
 
 
 @pytest.mark.parity
 @pending
-def test_get_boolean_input_gets_required_input(test_environ: Mapping[str, str]) -> None:
+def test_get_boolean_input_gets_required_input(
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
+) -> None:
     """upstream: core.test.ts: 'getInput gets required input' (boolean overload)"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_boolean('boolean input', required=True) is True
 
 
 @pytest.mark.parity
 @pending
-def test_get_boolean_input_handles_boolean_input(
-    test_environ: Mapping[str, str],
+@pytest.mark.parametrize(
+    ('name', 'expected'),
+    [
+        pytest.param('boolean input true1', True, id='true1'),
+        pytest.param('boolean input true2', True, id='true2'),
+        pytest.param('boolean input true3', True, id='true3'),
+        pytest.param('boolean input false1', False, id='false1'),
+        pytest.param('boolean input false2', False, id='false2'),
+        pytest.param('boolean input false3', False, id='false3'),
+    ],
+)
+def test_get_boolean_input_handles_every_yaml_boolean_literal(
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
+    name: str,
+    *,
+    expected: bool,
 ) -> None:
     """upstream: core.test.ts: 'getBooleanInput handles boolean input'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
-    assert inputs.get_boolean('boolean input true1') is True
-    assert inputs.get_boolean('boolean input true2') is True
-    assert inputs.get_boolean('boolean input true3') is True
-    assert inputs.get_boolean('boolean input false1') is False
-    assert inputs.get_boolean('boolean input false2') is False
-    assert inputs.get_boolean('boolean input false3') is False
+    inputs = make_inputs(make_environment())
+    assert inputs.get_boolean(name) is expected
 
 
 @pytest.mark.extension
 @pending
 def test_get_boolean_input_handles_wrong_boolean_input(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getBooleanInput handles wrong boolean input'
 
@@ -150,36 +163,41 @@ def test_get_boolean_input_handles_wrong_boolean_input(
     instead, so this is ported as an extension rather than a byte-identical
     parity case.
     """
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     with pytest.raises(InputParseError):
         inputs.get_boolean('wrong boolean input')
 
 
 @pytest.mark.parity
 @pending
-def test_get_multiline_input_works(test_environ: Mapping[str, str]) -> None:
+def test_get_multiline_input_works(
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
+) -> None:
     """upstream: core.test.ts: 'getMultilineInput works'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_multiline('my input list') == ['val1', 'val2', 'val3']
 
 
 @pytest.mark.parity
 @pending
 def test_get_multiline_input_trims_whitespace_by_default(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getMultilineInput trims whitespace by default'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_multiline('list with trailing whitespace') == ['val1', 'val2']
 
 
 @pytest.mark.parity
 @pending
 def test_get_multiline_input_trims_whitespace_when_option_explicitly_true(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getMultilineInput trims whitespace when option is explicitly true'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_multiline('list with trailing whitespace', trim=True) == [
         'val1',
         'val2',
@@ -189,10 +207,11 @@ def test_get_multiline_input_trims_whitespace_when_option_explicitly_true(
 @pytest.mark.parity
 @pending
 def test_get_multiline_input_does_not_trim_whitespace_when_option_false(
-    test_environ: Mapping[str, str],
+    make_inputs: Callable[[ProcessEnvironment], EnvInputs],
+    make_environment: Callable[..., ProcessEnvironment],
 ) -> None:
     """upstream: core.test.ts: 'getMultilineInput does not trim whitespace when option is false'"""
-    inputs = EnvInputs(ProcessEnvironment(dict(test_environ)))
+    inputs = make_inputs(make_environment())
     assert inputs.get_multiline('list with trailing whitespace', trim=False) == [
         '  val1  ',
         '  val2  ',

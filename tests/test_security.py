@@ -14,8 +14,8 @@ attack it defends against alongside the assertion:
    returns it to the caller.
 
 The six delimiter-injection ports in `tests/test_env_files.py`
-(`test_export_variable_rejects_delimiter_in_*`, `test_set_output_rejects_delimiter_in_*`,
-`test_save_state_rejects_delimiter_in_*`) cover abuse case 1 for `GITHUB_OUTPUT`/
+(`test_export_variable_rejects_forged_delimiter`, `test_set_output_rejects_forged_delimiter`,
+`test_save_state_rejects_forged_delimiter`) cover abuse case 1 for `GITHUB_OUTPUT`/
 `GITHUB_STATE` and the plain raise-on-injection behavior for `GITHUB_ENV`; the
 `GITHUB_ENV` case below additionally asserts the file is left byte-for-byte
 uncorrupted, which those ports do not check.
@@ -23,7 +23,7 @@ uncorrupted, which those ports do not check.
 
 import asyncio
 import os
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -32,26 +32,24 @@ from tests.fixtures.runtime import FROZEN_DELIMITER
 from tests.fixtures.sink_recorder import WriteRecorder
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment, ProcessEnvironment
+from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import DelimiterInjectionError
 from gha_toolkit.files import HeredocFile
 from gha_toolkit.logger import WorkflowLogger
 from gha_toolkit.oidc import HttpOidcClient
-from gha_toolkit.sinks import StdoutSink
 
-
-def _environment_with_file(
-    test_environ: Mapping[str, str], env_var: str, file_path: Path
-) -> GithubEnvironment:
-    file_path.write_text('', encoding='utf-8')
-    environ = {**test_environ, env_var: str(file_path)}
-    return ProcessEnvironment(dict(environ))
+MakeEnvironment = Callable[..., ProcessEnvironment]
+MakeEnvFile = Callable[..., HeredocFile]
+MakeLogger = Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger]
 
 
 @pytest.mark.security
 @pending
 def test_delimiter_injection_does_not_corrupt_github_env_file(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_env_file: MakeEnvFile,
+    delimiter: Callable[[], str],
 ) -> None:
     """Abuse case 1: a value crafted to contain the exact runner-file
     delimiter, shaped to look like a closed heredoc block followed by a
@@ -59,9 +57,9 @@ def test_delimiter_injection_does_not_corrupt_github_env_file(
     `GITHUB_ENV` byte-for-byte unchanged rather than writing the corrupted
     block.
     """
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
+    env_path = runner_file_path('env')
+    environment = make_environment({'GITHUB_ENV': str(env_path)})
+    env_file = make_env_file(environment, delimiter)
     malicious_value = f'harmless{os.linesep}{FROZEN_DELIMITER}{os.linesep}PWNED=1{os.linesep}MYVAR<<{FROZEN_DELIMITER}'
     with pytest.raises(DelimiterInjectionError):
         env_file.set('MYVAR', malicious_value)
@@ -70,16 +68,16 @@ def test_delimiter_injection_does_not_corrupt_github_env_file(
 
 @pytest.mark.security
 @pending
-def test_log_message_escaping_prevents_command_smuggling(sink: WriteRecorder) -> None:
+def test_log_message_escaping_prevents_command_smuggling(
+    make_logger: MakeLogger, sink: WriteRecorder, empty_environment: ProcessEnvironment
+) -> None:
     """Abuse case 2: an attacker-controlled message (for example, reflected
     from a PR title) containing newlines and `::name::` framing must be
     percent-escaped into a single command, not passed through -- an
     unescaped newline would let the message inject a second, independently
     parsed workflow command into the log stream.
     """
-    logger = WorkflowLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
-    )
+    logger = make_logger(sink, empty_environment)
     payload = 'legitimate message\n::error::SMUGGLED\n::set-output name=pwned::1'
     logger.notice(payload)
     sink.assert_writes(
@@ -98,16 +96,14 @@ def test_log_message_escaping_prevents_command_smuggling(sink: WriteRecorder) ->
 @pytest.mark.security
 @pending
 def test_set_secret_value_never_appears_unescaped_in_sink_output(
-    sink: WriteRecorder,
+    make_logger: MakeLogger, sink: WriteRecorder, empty_environment: ProcessEnvironment
 ) -> None:
     """Abuse case 3: a value handed to `set_secret` must reach the sink only
     in its escaped form -- a value containing a raw `\\r\\n` could otherwise
     let the masked value's own bytes terminate the `::add-mask::` command
     early and inject an unrelated, unmasked line into the log.
     """
-    logger = WorkflowLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=ProcessEnvironment({})
-    )
+    logger = make_logger(sink, empty_environment)
     payload = 'super-sensitive\r\nvalue::with::colons'
     logger.set_secret(payload)
     sink.assert_writes(
@@ -119,8 +115,12 @@ def test_set_secret_value_never_appears_unescaped_in_sink_output(
 @pytest.mark.security
 @pending
 def test_get_id_token_masks_the_token_before_returning(
-    test_oidc_environ: Mapping[str, str],
+    make_oidc_environment: MakeEnvironment,
     test_token_transport: OidcTokenTransport,
+    make_logger: MakeLogger,
+    make_oidc_client: Callable[
+        [OidcTokenTransport, ProcessEnvironment, WorkflowLogger], HttpOidcClient
+    ],
     sink: WriteRecorder,
 ) -> None:
     """Abuse case 4: `get_id_token` must call `logger.set_secret` on the
@@ -129,11 +129,9 @@ def test_get_id_token_masks_the_token_before_returning(
     kind of high-privilege credential that must never appear unmasked in a
     job log.
     """
-    environment = ProcessEnvironment(dict(test_oidc_environ))
-    logger = WorkflowLogger(
-        sink=StdoutSink(stream=sink), stream=sink, environment=environment
-    )
-    client = HttpOidcClient(test_token_transport, environment, logger)
+    environment = make_oidc_environment()
+    logger = make_logger(sink, environment)
+    client = make_oidc_client(test_token_transport, environment, logger)
     returned = asyncio.run(client.get_id_token())
     assert returned == 'id-token-value'
     sink.assert_writes([f'::add-mask::id-token-value{os.linesep}'])

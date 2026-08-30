@@ -1,8 +1,10 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 import pytest
 from pytest_mock import MockerFixture
+
+from gha_toolkit.sinks import StdoutSink
 
 
 @dataclass(slots=True)
@@ -39,3 +41,13 @@ def stdout_sink(mocker: MockerFixture) -> WriteRecorder:
     recorder = WriteRecorder()
     mocker.patch('sys.stdout.write', side_effect=recorder.write)
     return recorder
+
+
+@pytest.fixture
+def make_command_sink() -> Callable[[WriteRecorder], StdoutSink]:
+    """Factory for a `StdoutSink` bound to a `WriteRecorder` stream."""
+
+    def _make(stream: WriteRecorder) -> StdoutSink:
+        return StdoutSink(stream=stream)
+
+    return _make

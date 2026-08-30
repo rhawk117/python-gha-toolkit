@@ -1,8 +1,13 @@
 import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Self
 
 import pytest
+
+from gha_toolkit.environment import GithubEnvironment
+from gha_toolkit.logger import ActionsLogger
+from gha_toolkit.oidc import HttpOidcClient
 
 
 @dataclass(slots=True)
@@ -40,3 +45,17 @@ class TestTokenTransport:
 @pytest.fixture
 def test_token_transport() -> TestTokenTransport:
     return TestTokenTransport()
+
+
+@pytest.fixture
+def make_oidc_client() -> Callable[
+    [TestTokenTransport, GithubEnvironment, ActionsLogger], HttpOidcClient
+]:
+    def _make(
+        transport: TestTokenTransport,
+        environment: GithubEnvironment,
+        logger: ActionsLogger,
+    ) -> HttpOidcClient:
+        return HttpOidcClient(transport, environment, logger)
+
+    return _make

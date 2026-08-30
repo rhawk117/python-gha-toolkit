@@ -1,7 +1,9 @@
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import pytest
+
+from gha_toolkit.environment import ProcessEnvironment
 
 
 @pytest.fixture
@@ -106,3 +108,35 @@ def fake_os_environ(
         monkeypatch.setenv(key, value)
 
     return test_environ
+
+
+@pytest.fixture
+def empty_environment() -> ProcessEnvironment:
+    """A `ProcessEnvironment` with no bound vars, for tests that only care about
+    command rendering and never touch a runner file or `INPUT_*`/`GITHUB_*` var.
+    """
+    return ProcessEnvironment({})
+
+
+@pytest.fixture
+def make_environment(
+    test_environ: Mapping[str, str],
+) -> Callable[..., ProcessEnvironment]:
+    """Factory for a `ProcessEnvironment` layered over `test_environ`."""
+
+    def _make(overrides: Mapping[str, str] | None = None) -> ProcessEnvironment:
+        return ProcessEnvironment({**test_environ, **(overrides or {})})
+
+    return _make
+
+
+@pytest.fixture
+def make_oidc_environment(
+    test_oidc_environ: Mapping[str, str],
+) -> Callable[..., ProcessEnvironment]:
+    """Factory for a `ProcessEnvironment` layered over `test_oidc_environ`."""
+
+    def _make(overrides: Mapping[str, str] | None = None) -> ProcessEnvironment:
+        return ProcessEnvironment({**test_oidc_environ, **(overrides or {})})
+
+    return _make

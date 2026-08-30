@@ -14,7 +14,7 @@ exercises the documented `get_id_token` contract (`gha_toolkit/oidc.py`,
 """
 
 import asyncio
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from urllib.parse import quote
 
 import pytest
@@ -24,30 +24,46 @@ from tests.markers import pending
 
 from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import OidcFailureError
-from gha_toolkit.logger import WorkflowLogger
-from gha_toolkit.oidc import HttpOidcClient, OidcClient
-from gha_toolkit.sinks import StdoutSink
+from gha_toolkit.logger import ActionsLogger, WorkflowLogger
+from gha_toolkit.oidc import HttpOidcClient
+
+MakeEnvironment = Callable[..., ProcessEnvironment]
 
 
-def _client(environ: Mapping[str, str], transport: OidcTokenTransport) -> OidcClient:
-    environment = ProcessEnvironment(dict(environ))
-    stream = WriteRecorder()
-    logger = WorkflowLogger(
-        sink=StdoutSink(stream=stream), stream=stream, environment=environment
-    )
-    return HttpOidcClient(transport, environment, logger)
+@pytest.fixture
+def make_client(
+    make_logger: Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger],
+    make_oidc_client: Callable[
+        [OidcTokenTransport, ProcessEnvironment, ActionsLogger], HttpOidcClient
+    ],
+    sink: WriteRecorder,
+) -> Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient]:
+    """Build an `HttpOidcClient` bound to a fresh `WorkflowLogger`, mirroring
+    upstream's `oidc-client-tests` setup, which never asserts against logger
+    output -- only `test_security.py`'s masking case does.
+    """
+
+    def _make(
+        environment: ProcessEnvironment, transport: OidcTokenTransport
+    ) -> HttpOidcClient:
+        logger = make_logger(sink, environment)
+        return make_oidc_client(transport, environment, logger)
+
+    return _make
 
 
 @pytest.mark.extension
 @pending
 def test_get_id_token_raises_when_request_token_is_missing(
-    test_environ: Mapping[str, str], test_token_transport: OidcTokenTransport
+    make_environment: MakeEnvironment,
+    test_token_transport: OidcTokenTransport,
+    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 1: a missing/empty `ACTIONS_ID_TOKEN_REQUEST_TOKEN`
     raises `OidcFailureError` before any request is issued.
     """
-    environ = {**test_environ, 'ACTIONS_ID_TOKEN_REQUEST_TOKEN': ''}
-    client = _client(environ, test_token_transport)
+    environment = make_environment({'ACTIONS_ID_TOKEN_REQUEST_TOKEN': ''})
+    client = make_client(environment, test_token_transport)
     with pytest.raises(OidcFailureError):
         asyncio.run(client.get_id_token())
 
@@ -55,13 +71,15 @@ def test_get_id_token_raises_when_request_token_is_missing(
 @pytest.mark.extension
 @pending
 def test_get_id_token_raises_when_request_url_is_missing(
-    test_oidc_environ: Mapping[str, str], test_token_transport: OidcTokenTransport
+    make_oidc_environment: MakeEnvironment,
+    test_token_transport: OidcTokenTransport,
+    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 2: a missing/empty `ACTIONS_ID_TOKEN_REQUEST_URL`
     raises `OidcFailureError` before any request is issued.
     """
-    environ = {**test_oidc_environ, 'ACTIONS_ID_TOKEN_REQUEST_URL': ''}
-    client = _client(environ, test_token_transport)
+    environment = make_oidc_environment({'ACTIONS_ID_TOKEN_REQUEST_URL': ''})
+    client = make_client(environment, test_token_transport)
     with pytest.raises(OidcFailureError):
         asyncio.run(client.get_id_token())
 
@@ -69,12 +87,16 @@ def test_get_id_token_raises_when_request_url_is_missing(
 @pytest.mark.extension
 @pending
 def test_get_id_token_appends_url_encoded_audience(
-    test_oidc_environ: Mapping[str, str], test_token_transport: OidcTokenTransport
+    test_oidc_environ: Mapping[str, str],
+    make_oidc_environment: MakeEnvironment,
+    test_token_transport: OidcTokenTransport,
+    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 3: a non-`None` audience is URL-encoded and
     appended to the resolved request URL as a literal `&audience=...` suffix.
     """
-    client = _client(test_oidc_environ, test_token_transport)
+    environment = make_oidc_environment()
+    client = make_client(environment, test_token_transport)
     returned = asyncio.run(client.get_id_token('api://Default & special'))
     assert returned == 'id-token-value'
     expected_url = (
@@ -91,13 +113,16 @@ def test_get_id_token_appends_url_encoded_audience(
 @pytest.mark.extension
 @pending
 def test_get_id_token_wraps_transport_failure(
-    test_oidc_environ: Mapping[str, str], test_token_transport: OidcTokenTransport
+    make_oidc_environment: MakeEnvironment,
+    test_token_transport: OidcTokenTransport,
+    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 5: an exception raised by the bound transport
     is caught and re-raised as `OidcFailureError`, chained from the original.
     """
+    environment = make_oidc_environment()
     transport = test_token_transport.failing(RuntimeError('connection refused'))
-    client = _client(test_oidc_environ, transport)
+    client = make_client(environment, transport)
     with pytest.raises(OidcFailureError) as excinfo:
         asyncio.run(client.get_id_token())
     assert isinstance(excinfo.value.__cause__, RuntimeError)
@@ -106,12 +131,15 @@ def test_get_id_token_wraps_transport_failure(
 @pytest.mark.extension
 @pending
 def test_get_id_token_raises_when_value_field_is_missing(
-    test_oidc_environ: Mapping[str, str], test_token_transport: OidcTokenTransport
+    make_oidc_environment: MakeEnvironment,
+    test_token_transport: OidcTokenTransport,
+    make_client: Callable[[ProcessEnvironment, OidcTokenTransport], HttpOidcClient],
 ) -> None:
     """Documented contract, step 6: a response body that is valid JSON but has
     no (or an empty) `'value'` field raises `OidcFailureError`.
     """
+    environment = make_oidc_environment()
     transport = test_token_transport.returning({'notvalue': 'something'})
-    client = _client(test_oidc_environ, transport)
+    client = make_client(environment, transport)
     with pytest.raises(OidcFailureError):
         asyncio.run(client.get_id_token())

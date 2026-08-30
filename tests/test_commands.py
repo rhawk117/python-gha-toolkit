@@ -8,6 +8,7 @@ reaches the log stream.
 """
 
 import os
+from collections.abc import Callable
 
 import pytest
 from tests.fixtures.sink_recorder import WriteRecorder
@@ -21,18 +22,22 @@ from gha_toolkit.sinks import StdoutSink
 
 @pytest.mark.parity
 @pending
-def test_command_only(sink: WriteRecorder) -> None:
+def test_command_only(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'command only'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(ActionCommand(name='some-command', properties={}, message=''))
     sink.assert_writes([f'::some-command::{os.linesep}'])
 
 
 @pytest.mark.parity
 @pending
-def test_command_escapes_message(sink: WriteRecorder) -> None:
+def test_command_escapes_message(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'command escapes message'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
         ActionCommand(
             name='some-command',
@@ -61,9 +66,11 @@ def test_command_escapes_message(sink: WriteRecorder) -> None:
 
 @pytest.mark.parity
 @pending
-def test_command_escapes_property(sink: WriteRecorder) -> None:
+def test_command_escapes_property(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'command escapes property'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
         ActionCommand(
             name='some-command',
@@ -104,9 +111,11 @@ def test_command_escapes_property(sink: WriteRecorder) -> None:
 
 @pytest.mark.parity
 @pending
-def test_command_with_message(sink: WriteRecorder) -> None:
+def test_command_with_message(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'command with message'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
         ActionCommand(name='some-command', properties={}, message='some message')
     )
@@ -115,9 +124,11 @@ def test_command_with_message(sink: WriteRecorder) -> None:
 
 @pytest.mark.parity
 @pending
-def test_command_with_message_and_properties(sink: WriteRecorder) -> None:
+def test_command_with_message_and_properties(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'command with message and properties'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
         ActionCommand(
             name='some-command',
@@ -132,52 +143,46 @@ def test_command_with_message_and_properties(sink: WriteRecorder) -> None:
 
 @pytest.mark.parity
 @pending
-def test_command_with_one_property(sink: WriteRecorder) -> None:
-    """upstream: command.test.ts: 'command with one property'"""
-    stdout_sink = StdoutSink(stream=sink)
+@pytest.mark.parametrize(
+    ('properties', 'expected_properties'),
+    [
+        pytest.param({'prop1': 'value 1'}, 'prop1=value 1', id='one_property'),
+        pytest.param(
+            {'prop1': 'value 1', 'prop2': 'value 2'},
+            'prop1=value 1,prop2=value 2',
+            id='two_properties',
+        ),
+        pytest.param(
+            {'prop1': 'value 1', 'prop2': 'value 2', 'prop3': 'value 3'},
+            'prop1=value 1,prop2=value 2,prop3=value 3',
+            id='three_properties',
+        ),
+    ],
+)
+def test_command_renders_property_list_in_insertion_order(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink],
+    sink: WriteRecorder,
+    properties: dict[str, str],
+    expected_properties: str,
+) -> None:
+    """upstream: command.test.ts: 'command with one property'
+    upstream: command.test.ts: 'command with two properties'
+    upstream: command.test.ts: 'command with three properties'
+    """
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
-        ActionCommand(name='some-command', properties={'prop1': 'value 1'}, message='')
+        ActionCommand(name='some-command', properties=properties, message='')
     )
-    sink.assert_writes([f'::some-command prop1=value 1::{os.linesep}'])
+    sink.assert_writes([f'::some-command {expected_properties}::{os.linesep}'])
 
 
 @pytest.mark.parity
 @pending
-def test_command_with_two_properties(sink: WriteRecorder) -> None:
-    """upstream: command.test.ts: 'command with two properties'"""
-    stdout_sink = StdoutSink(stream=sink)
-    stdout_sink.invoke(
-        ActionCommand(
-            name='some-command',
-            properties={'prop1': 'value 1', 'prop2': 'value 2'},
-            message='',
-        )
-    )
-    sink.assert_writes([f'::some-command prop1=value 1,prop2=value 2::{os.linesep}'])
-
-
-@pytest.mark.parity
-@pending
-def test_command_with_three_properties(sink: WriteRecorder) -> None:
-    """upstream: command.test.ts: 'command with three properties'"""
-    stdout_sink = StdoutSink(stream=sink)
-    stdout_sink.invoke(
-        ActionCommand(
-            name='some-command',
-            properties={'prop1': 'value 1', 'prop2': 'value 2', 'prop3': 'value 3'},
-            message='',
-        )
-    )
-    sink.assert_writes(
-        [f'::some-command prop1=value 1,prop2=value 2,prop3=value 3::{os.linesep}']
-    )
-
-
-@pytest.mark.parity
-@pending
-def test_command_handles_non_string_objects(sink: WriteRecorder) -> None:
+def test_command_handles_non_string_objects(
+    make_command_sink: Callable[[WriteRecorder], StdoutSink], sink: WriteRecorder
+) -> None:
     """upstream: command.test.ts: 'should handle issuing commands for non-string objects'"""
-    stdout_sink = StdoutSink(stream=sink)
+    stdout_sink = make_command_sink(sink)
     stdout_sink.invoke(
         ActionCommand(
             name='some-command',
@@ -197,7 +202,11 @@ def test_command_handles_non_string_objects(sink: WriteRecorder) -> None:
 
 @pytest.mark.parity
 @pending
-def test_annotations_map_field_names_correctly(sink: WriteRecorder) -> None:
+def test_annotations_map_field_names_correctly(
+    make_logger: Callable[[WriteRecorder, ProcessEnvironment], WorkflowLogger],
+    sink: WriteRecorder,
+    empty_environment: ProcessEnvironment,
+) -> None:
     """upstream: core.test.ts: 'annotations map field names correctly'
 
     Ported against the public logger surface rather than the private
@@ -207,10 +216,7 @@ def test_annotations_map_field_names_correctly(sink: WriteRecorder) -> None:
     `toCommandProperties` test asserts directly against a private helper we
     do not expose.
     """
-    stdout_sink = StdoutSink(stream=sink)
-    logger = WorkflowLogger(
-        sink=stdout_sink, stream=sink, environment=ProcessEnvironment({})
-    )
+    logger = make_logger(sink, empty_environment)
     options = AnnotationOptions(
         title='A title',
         file='root/test.txt',

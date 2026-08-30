@@ -9,172 +9,124 @@ in 2022 -- see `gha_toolkit.files`'s module docstring), the parity tests
 delimiter-injection tests (security-marked).
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 from tests.fixtures.runtime import FROZEN_DELIMITER
 from tests.markers import pending
 
-from gha_toolkit.environment import GithubEnvironment, ProcessEnvironment
+from gha_toolkit.commands import OutputValue
+from gha_toolkit.environment import ProcessEnvironment
 from gha_toolkit.exceptions import DelimiterInjectionError, MissingRunnerFileError
 from gha_toolkit.files import HeredocFile
 from gha_toolkit.services import StepOutput, StepState
 
-
-def _environment_with_file(
-    test_environ: Mapping[str, str], env_var: str, file_path: Path
-) -> GithubEnvironment:
-    file_path.write_text('', encoding='utf-8')
-    environ = {**test_environ, env_var: str(file_path)}
-    return ProcessEnvironment(dict(environ))
-
-
-def _environment_missing_file(
-    test_environ: Mapping[str, str], env_var: str
-) -> GithubEnvironment:
-    environ = {**test_environ, env_var: ''}
-    return ProcessEnvironment(dict(environ))
-
+MakeEnvironment = Callable[..., ProcessEnvironment]
+MakeEnvFile = Callable[..., HeredocFile]
+MakeOutput = Callable[..., StepOutput]
+MakeState = Callable[..., StepState]
 
 # -- exportVariable -----------------------------------------------------
 
 
 @pytest.mark.extension
 @pending
-def test_legacy_export_variable_produces_command_and_sets_env(
-    test_environ: Mapping[str, str],
+@pytest.mark.parametrize(
+    ('key', 'value'),
+    [
+        pytest.param('my var', 'var val', id='baseline'),
+        pytest.param(
+            'special char var \r\n,:', 'special val', id='escapes_variable_names'
+        ),
+        pytest.param('my var2', 'var val\r\n', id='escapes_variable_values'),
+        pytest.param('my var', True, id='boolean_inputs'),
+        pytest.param('my var', 5, id='number_inputs'),
+    ],
+)
+def test_legacy_export_variable_raises_when_env_file_is_missing(
+    make_environment: MakeEnvironment,
+    make_env_file: MakeEnvFile,
+    key: str,
+    value: OutputValue,
 ) -> None:
     """upstream: core.test.ts: 'legacy exportVariable produces the correct command and sets the env'
+    upstream: core.test.ts: 'legacy exportVariable escapes variable names'
+    upstream: core.test.ts: 'legacy exportVariable escapes variable values'
+    upstream: core.test.ts: 'legacy exportVariable handles boolean inputs'
+    upstream: core.test.ts: 'legacy exportVariable handles number inputs'
 
     Decision of record (gha_toolkit.files module docstring): a missing
     `GITHUB_ENV` raises `MissingRunnerFileError` instead of falling back to
     the removed `::set-env` stdout command.
     """
-    environment = _environment_missing_file(test_environ, 'GITHUB_ENV')
-    env_file = HeredocFile('GITHUB_ENV', environment)
+    environment = make_environment({'GITHUB_ENV': ''})
+    env_file = make_env_file(environment)
     with pytest.raises(MissingRunnerFileError):
-        env_file.set('my var', 'var val')
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_export_variable_escapes_variable_names(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'legacy exportVariable escapes variable names'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_ENV')
-    env_file = HeredocFile('GITHUB_ENV', environment)
-    with pytest.raises(MissingRunnerFileError):
-        env_file.set('special char var \r\n,:', 'special val')
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_export_variable_escapes_variable_values(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'legacy exportVariable escapes variable values'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_ENV')
-    env_file = HeredocFile('GITHUB_ENV', environment)
-    with pytest.raises(MissingRunnerFileError):
-        env_file.set('my var2', 'var val\r\n')
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_export_variable_handles_boolean_inputs(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'legacy exportVariable handles boolean inputs'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_ENV')
-    env_file = HeredocFile('GITHUB_ENV', environment)
-    with pytest.raises(MissingRunnerFileError):
-        env_file.set('my var', True)
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_export_variable_handles_number_inputs(
-    test_environ: Mapping[str, str],
-) -> None:
-    """upstream: core.test.ts: 'legacy exportVariable handles number inputs'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_ENV')
-    env_file = HeredocFile('GITHUB_ENV', environment)
-    with pytest.raises(MissingRunnerFileError):
-        env_file.set('my var', 5)
+        env_file.set(key, value)
 
 
 @pytest.mark.parity
 @pending
-def test_export_variable_produces_command_and_sets_env(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('value', 'expected_value'),
+    [
+        pytest.param('var val', 'var val', id='string'),
+        pytest.param(True, 'true', id='boolean'),
+        pytest.param(5, '5', id='number'),
+    ],
+)
+def test_export_variable_writes_heredoc_block_for_value_shape(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_env_file: MakeEnvFile,
+    delimiter: Callable[[], str],
+    value: OutputValue,
+    expected_value: str,
 ) -> None:
-    """upstream: core.test.ts: 'exportVariable produces the correct command and sets the env'"""
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    environment.set('my var', 'var val')
-    assert environment.get('my var') == 'var val'
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
-    env_file.set('my var', 'var val')
-    expected = f'my var<<{FROZEN_DELIMITER}\nvar val\n{FROZEN_DELIMITER}\n'
-    assert env_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_export_variable_handles_boolean_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'exportVariable handles boolean inputs'"""
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
-    env_file.set('my var', True)
-    expected = f'my var<<{FROZEN_DELIMITER}\ntrue\n{FROZEN_DELIMITER}\n'
-    assert env_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_export_variable_handles_number_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'exportVariable handles number inputs'"""
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
-    env_file.set('my var', 5)
-    expected = f'my var<<{FROZEN_DELIMITER}\n5\n{FROZEN_DELIMITER}\n'
+    """upstream: core.test.ts: 'exportVariable produces the correct command and sets the env'
+    upstream: core.test.ts: 'exportVariable handles boolean inputs'
+    upstream: core.test.ts: 'exportVariable handles number inputs'
+    """
+    env_path = runner_file_path('env')
+    environment = make_environment({'GITHUB_ENV': str(env_path)})
+    if isinstance(value, str):
+        environment.set('my var', value)
+        assert environment.get('my var') == value
+    env_file = make_env_file(environment, delimiter)
+    env_file.set('my var', value)
+    expected = f'my var<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
     assert env_path.read_text(encoding='utf-8') == expected
 
 
 @pytest.mark.security
 @pytest.mark.parity
 @pending
-def test_export_variable_rejects_delimiter_in_value(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('key', 'value'),
+    [
+        pytest.param(
+            'my var', f'good stuff {FROZEN_DELIMITER} bad stuff', id='in_value'
+        ),
+        pytest.param(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test', id='in_name'),
+    ],
+)
+def test_export_variable_rejects_forged_delimiter(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_env_file: MakeEnvFile,
+    delimiter: Callable[[], str],
+    key: str,
+    value: str,
 ) -> None:
-    """upstream: core.test.ts: 'exportVariable does not allow delimiter as value'"""
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
+    """upstream: core.test.ts: 'exportVariable does not allow delimiter as value'
+    upstream: core.test.ts: 'exportVariable does not allow delimiter as name'
+    """
+    env_path = runner_file_path('env')
+    environment = make_environment({'GITHUB_ENV': str(env_path)})
+    env_file = make_env_file(environment, delimiter)
     with pytest.raises(DelimiterInjectionError):
-        env_file.set('my var', f'good stuff {FROZEN_DELIMITER} bad stuff')
-
-
-@pytest.mark.security
-@pytest.mark.parity
-@pending
-def test_export_variable_rejects_delimiter_in_name(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'exportVariable does not allow delimiter as name'"""
-    env_path = tmp_path / 'env'
-    environment = _environment_with_file(test_environ, 'GITHUB_ENV', env_path)
-    env_file = HeredocFile('GITHUB_ENV', environment, delimiter)
-    with pytest.raises(DelimiterInjectionError):
-        env_file.set(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test')
+        env_file.set(key, value)
 
 
 # -- setOutput ------------------------------------------------------------
@@ -182,102 +134,85 @@ def test_export_variable_rejects_delimiter_in_name(
 
 @pytest.mark.extension
 @pending
-def test_legacy_set_output_produces_command(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy setOutput produces the correct command'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_OUTPUT')
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment))
+@pytest.mark.parametrize(
+    'value',
+    [
+        pytest.param('some value', id='string'),
+        pytest.param(False, id='boolean'),
+        pytest.param(1.01, id='number'),
+    ],
+)
+def test_legacy_set_output_raises_when_output_file_is_missing(
+    make_environment: MakeEnvironment, make_output: MakeOutput, value: OutputValue
+) -> None:
+    """upstream: core.test.ts: 'legacy setOutput produces the correct command'
+    upstream: core.test.ts: 'legacy setOutput handles bools'
+    upstream: core.test.ts: 'legacy setOutput handles numbers'
+    """
+    environment = make_environment({'GITHUB_OUTPUT': ''})
+    output = make_output(environment)
     with pytest.raises(MissingRunnerFileError):
-        output.set('some output', 'some value')
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_set_output_handles_bools(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy setOutput handles bools'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_OUTPUT')
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment))
-    with pytest.raises(MissingRunnerFileError):
-        output.set('some output', False)
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_set_output_handles_numbers(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy setOutput handles numbers'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_OUTPUT')
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment))
-    with pytest.raises(MissingRunnerFileError):
-        output.set('some output', 1.01)
+        output.set('some output', value)
 
 
 @pytest.mark.parity
 @pending
-def test_set_output_produces_command_and_sets_output(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('value', 'expected_value'),
+    [
+        pytest.param('out val', 'out val', id='string'),
+        pytest.param(True, 'true', id='boolean'),
+        pytest.param(5, '5', id='number'),
+    ],
+)
+def test_set_output_writes_heredoc_block_for_value_shape(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_output: MakeOutput,
+    delimiter: Callable[[], str],
+    value: OutputValue,
+    expected_value: str,
 ) -> None:
-    """upstream: core.test.ts: 'setOutput produces the correct command and sets the output'"""
-    output_path = tmp_path / 'output'
-    environment = _environment_with_file(test_environ, 'GITHUB_OUTPUT', output_path)
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment, delimiter))
-    output.set('my out', 'out val')
-    expected = f'my out<<{FROZEN_DELIMITER}\nout val\n{FROZEN_DELIMITER}\n'
-    assert output_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_set_output_handles_boolean_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'setOutput handles boolean inputs'"""
-    output_path = tmp_path / 'output'
-    environment = _environment_with_file(test_environ, 'GITHUB_OUTPUT', output_path)
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment, delimiter))
-    output.set('my out', True)
-    expected = f'my out<<{FROZEN_DELIMITER}\ntrue\n{FROZEN_DELIMITER}\n'
-    assert output_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_set_output_handles_number_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'setOutput handles number inputs'"""
-    output_path = tmp_path / 'output'
-    environment = _environment_with_file(test_environ, 'GITHUB_OUTPUT', output_path)
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment, delimiter))
-    output.set('my out', 5)
-    expected = f'my out<<{FROZEN_DELIMITER}\n5\n{FROZEN_DELIMITER}\n'
+    """upstream: core.test.ts: 'setOutput produces the correct command and sets the output'
+    upstream: core.test.ts: 'setOutput handles boolean inputs'
+    upstream: core.test.ts: 'setOutput handles number inputs'
+    """
+    output_path = runner_file_path('output')
+    environment = make_environment({'GITHUB_OUTPUT': str(output_path)})
+    output = make_output(environment, delimiter)
+    output.set('my out', value)
+    expected = f'my out<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
     assert output_path.read_text(encoding='utf-8') == expected
 
 
 @pytest.mark.security
 @pytest.mark.parity
 @pending
-def test_set_output_rejects_delimiter_in_value(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('key', 'value'),
+    [
+        pytest.param(
+            'my out', f'good stuff {FROZEN_DELIMITER} bad stuff', id='in_value'
+        ),
+        pytest.param(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test', id='in_name'),
+    ],
+)
+def test_set_output_rejects_forged_delimiter(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_output: MakeOutput,
+    delimiter: Callable[[], str],
+    key: str,
+    value: str,
 ) -> None:
-    """upstream: core.test.ts: 'setOutput does not allow delimiter as value'"""
-    output_path = tmp_path / 'output'
-    environment = _environment_with_file(test_environ, 'GITHUB_OUTPUT', output_path)
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment, delimiter))
+    """upstream: core.test.ts: 'setOutput does not allow delimiter as value'
+    upstream: core.test.ts: 'setOutput does not allow delimiter as name'
+    """
+    output_path = runner_file_path('output')
+    environment = make_environment({'GITHUB_OUTPUT': str(output_path)})
+    output = make_output(environment, delimiter)
     with pytest.raises(DelimiterInjectionError):
-        output.set('my out', f'good stuff {FROZEN_DELIMITER} bad stuff')
-
-
-@pytest.mark.security
-@pytest.mark.parity
-@pending
-def test_set_output_rejects_delimiter_in_name(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'setOutput does not allow delimiter as name'"""
-    output_path = tmp_path / 'output'
-    environment = _environment_with_file(test_environ, 'GITHUB_OUTPUT', output_path)
-    output = StepOutput(HeredocFile('GITHUB_OUTPUT', environment, delimiter))
-    with pytest.raises(DelimiterInjectionError):
-        output.set(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test')
+        output.set(key, value)
 
 
 # -- saveState --------------------------------------------------------------
@@ -285,99 +220,82 @@ def test_set_output_rejects_delimiter_in_name(
 
 @pytest.mark.extension
 @pending
-def test_legacy_save_state_produces_command(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy saveState produces the correct command'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_STATE')
-    state = StepState(HeredocFile('GITHUB_STATE', environment), environment)
+@pytest.mark.parametrize(
+    'value',
+    [
+        pytest.param('some value', id='string'),
+        pytest.param(1, id='number'),
+        pytest.param(True, id='boolean'),
+    ],
+)
+def test_legacy_save_state_raises_when_state_file_is_missing(
+    make_environment: MakeEnvironment, make_state: MakeState, value: OutputValue
+) -> None:
+    """upstream: core.test.ts: 'legacy saveState produces the correct command'
+    upstream: core.test.ts: 'legacy saveState handles numbers'
+    upstream: core.test.ts: 'legacy saveState handles bools'
+    """
+    environment = make_environment({'GITHUB_STATE': ''})
+    state = make_state(environment)
     with pytest.raises(MissingRunnerFileError):
-        state.save('state_1', 'some value')
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_save_state_handles_numbers(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy saveState handles numbers'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_STATE')
-    state = StepState(HeredocFile('GITHUB_STATE', environment), environment)
-    with pytest.raises(MissingRunnerFileError):
-        state.save('state_1', 1)
-
-
-@pytest.mark.extension
-@pending
-def test_legacy_save_state_handles_bools(test_environ: Mapping[str, str]) -> None:
-    """upstream: core.test.ts: 'legacy saveState handles bools'"""
-    environment = _environment_missing_file(test_environ, 'GITHUB_STATE')
-    state = StepState(HeredocFile('GITHUB_STATE', environment), environment)
-    with pytest.raises(MissingRunnerFileError):
-        state.save('state_1', True)
+        state.save('state_1', value)
 
 
 @pytest.mark.parity
 @pending
-def test_save_state_produces_command_and_saves_state(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('value', 'expected_value'),
+    [
+        pytest.param('out val', 'out val', id='string'),
+        pytest.param(True, 'true', id='boolean'),
+        pytest.param(5, '5', id='number'),
+    ],
+)
+def test_save_state_writes_heredoc_block_for_value_shape(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_state: MakeState,
+    delimiter: Callable[[], str],
+    value: OutputValue,
+    expected_value: str,
 ) -> None:
-    """upstream: core.test.ts: 'saveState produces the correct command and saves the state'"""
-    state_path = tmp_path / 'state'
-    environment = _environment_with_file(test_environ, 'GITHUB_STATE', state_path)
-    state = StepState(HeredocFile('GITHUB_STATE', environment, delimiter), environment)
-    state.save('my state', 'out val')
-    expected = f'my state<<{FROZEN_DELIMITER}\nout val\n{FROZEN_DELIMITER}\n'
-    assert state_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_save_state_handles_boolean_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'saveState handles boolean inputs'"""
-    state_path = tmp_path / 'state'
-    environment = _environment_with_file(test_environ, 'GITHUB_STATE', state_path)
-    state = StepState(HeredocFile('GITHUB_STATE', environment, delimiter), environment)
-    state.save('my state', True)
-    expected = f'my state<<{FROZEN_DELIMITER}\ntrue\n{FROZEN_DELIMITER}\n'
-    assert state_path.read_text(encoding='utf-8') == expected
-
-
-@pytest.mark.parity
-@pending
-def test_save_state_handles_number_inputs(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'saveState handles number inputs'"""
-    state_path = tmp_path / 'state'
-    environment = _environment_with_file(test_environ, 'GITHUB_STATE', state_path)
-    state = StepState(HeredocFile('GITHUB_STATE', environment, delimiter), environment)
-    state.save('my state', 5)
-    expected = f'my state<<{FROZEN_DELIMITER}\n5\n{FROZEN_DELIMITER}\n'
+    """upstream: core.test.ts: 'saveState produces the correct command and saves the state'
+    upstream: core.test.ts: 'saveState handles boolean inputs'
+    upstream: core.test.ts: 'saveState handles number inputs'
+    """
+    state_path = runner_file_path('state')
+    environment = make_environment({'GITHUB_STATE': str(state_path)})
+    state = make_state(environment, delimiter)
+    state.save('my state', value)
+    expected = f'my state<<{FROZEN_DELIMITER}\n{expected_value}\n{FROZEN_DELIMITER}\n'
     assert state_path.read_text(encoding='utf-8') == expected
 
 
 @pytest.mark.security
 @pytest.mark.parity
 @pending
-def test_save_state_rejects_delimiter_in_value(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
+@pytest.mark.parametrize(
+    ('key', 'value'),
+    [
+        pytest.param(
+            'my state', f'good stuff {FROZEN_DELIMITER} bad stuff', id='in_value'
+        ),
+        pytest.param(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test', id='in_name'),
+    ],
+)
+def test_save_state_rejects_forged_delimiter(
+    make_environment: MakeEnvironment,
+    runner_file_path: Callable[[str], Path],
+    make_state: MakeState,
+    delimiter: Callable[[], str],
+    key: str,
+    value: str,
 ) -> None:
-    """upstream: core.test.ts: 'saveState does not allow delimiter as value'"""
-    state_path = tmp_path / 'state'
-    environment = _environment_with_file(test_environ, 'GITHUB_STATE', state_path)
-    state = StepState(HeredocFile('GITHUB_STATE', environment, delimiter), environment)
+    """upstream: core.test.ts: 'saveState does not allow delimiter as value'
+    upstream: core.test.ts: 'saveState does not allow delimiter as name'
+    """
+    state_path = runner_file_path('state')
+    environment = make_environment({'GITHUB_STATE': str(state_path)})
+    state = make_state(environment, delimiter)
     with pytest.raises(DelimiterInjectionError):
-        state.save('my state', f'good stuff {FROZEN_DELIMITER} bad stuff')
-
-
-@pytest.mark.security
-@pytest.mark.parity
-@pending
-def test_save_state_rejects_delimiter_in_name(
-    test_environ: Mapping[str, str], tmp_path: Path, delimiter: Callable[[], str]
-) -> None:
-    """upstream: core.test.ts: 'saveState does not allow delimiter as name'"""
-    state_path = tmp_path / 'state'
-    environment = _environment_with_file(test_environ, 'GITHUB_STATE', state_path)
-    state = StepState(HeredocFile('GITHUB_STATE', environment, delimiter), environment)
-    with pytest.raises(DelimiterInjectionError):
-        state.save(f'good stuff {FROZEN_DELIMITER} bad stuff', 'test')
+        state.save(key, value)
