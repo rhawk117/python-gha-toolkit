@@ -90,9 +90,9 @@ def test_environ(
 
 @pytest.fixture
 def test_oidc_environ(
-    environ: Mapping[str, str], fake_oidc_dotenv_vars: Mapping[str, str]
+    test_environ: Mapping[str, str], fake_oidc_dotenv_vars: Mapping[str, str]
 ) -> Mapping[str, str]:
-    return {**environ, **fake_oidc_dotenv_vars}
+    return {**test_environ, **fake_oidc_dotenv_vars}
 
 
 @pytest.fixture

@@ -11,9 +11,10 @@ def repository_root() -> Path:
 
 
 pytest_plugins = (
-    'fixtures.environment',
-    'fixtures.runtime',
-    'fixtures.sink_recorder',
+    'tests.fixtures.environment',
+    'tests.fixtures.oidc',
+    'tests.fixtures.runtime',
+    'tests.fixtures.sink_recorder',
 )
 
 

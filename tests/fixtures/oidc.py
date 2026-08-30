@@ -18,7 +18,7 @@ class TestTokenTransport:
     error: Exception | None = None
     requests: list[RecordedRequest] = field(default_factory=list)
 
-    def post(self, url: str, *, bearer: str, timeout: float) -> bytes:
+    def get(self, url: str, *, bearer: str, timeout: float) -> bytes:
         self.requests.append(RecordedRequest(url=url, bearer=bearer, timeout=timeout))
         if self.error is not None:
             raise self.error
