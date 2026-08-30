@@ -79,6 +79,33 @@ class OidcFailureError(GhaToolkitError):
     """
 
 
+class EventPayloadError(GhaToolkitError):
+    """Raised when the triggering webhook event payload cannot be loaded or bound.
+
+    Two raise sites, both in :mod:`gha_toolkit.events`:
+
+    1. :func:`gha_toolkit.events.load_payload` -- reading and parsing the JSON
+       payload the triggering webhook wrote to the file named by
+       ``GITHUB_EVENT_PATH``. Raised when ``GITHUB_EVENT_PATH`` is unset or
+       empty, when the file it names does not exist or cannot be read, or
+       when the file's content is not valid JSON.
+
+       Deviation of record: upstream `Context`'s constructor
+       (``context.ts:29-40``) never raises for any of these three cases -- a
+       missing ``GITHUB_EVENT_PATH`` variable silently leaves ``payload`` as
+       ``{}``, and a path that does not exist writes a `GITHUB_EVENT_PATH
+       {path} does not exist` note to stdout and *also* leaves ``payload`` as
+       ``{}``. This package raises this exception in every one of those
+       cases instead of silently defaulting to an empty payload.
+
+    2. :meth:`gha_toolkit.events.WebhookEvent.unwrap` -- binding the loaded
+       payload onto a caller-requested event-model dataclass. Raised when the
+       payload's event name does not match the requested model's declared
+       ``EVENT_NAME``, or when the payload is missing a field the model
+       requires.
+    """
+
+
 class InvalidAnnotationError(GhaToolkitError):
     """Raised when annotation options violate a documented invariant.
 
