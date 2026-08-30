@@ -13,6 +13,7 @@ help:
 		'  format       Format Python, shell, and Markdown files' \
 		'  lint         Run all read-only quality checks' \
 		'  check        Format first, then run read-only checks' \
+		'  test         Run the pytest suite' \
 		'  pre-commit   Run the complete pre-commit stage' \
 		'  hooks        Install all configured Git hooks'
 
@@ -27,6 +28,11 @@ lint:
 .PHONY: check
 check:
 	$(QUALITY) --format --check
+
+.PHONY: test
+test:
+	$(UV) run --frozen --group test \
+		pytest
 
 .PHONY: pre-commit
 pre-commit:
